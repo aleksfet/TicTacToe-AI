@@ -1,0 +1,13 @@
+/*
+  Tic Tac Toe AI - styles (work in progress)
+
+  Only basic page styling for now. We keep the light background to match
+  the original Python prototype.
+*/
+
+body {
+  background-color: #e4e4e4; /* light gray, same idea as the Pygame version */
+  color: #000000;
+  font-family: "Times New Roman", serif;
+  text-align: center;
+}
