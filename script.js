@@ -5,8 +5,11 @@
 //   - Play vs Player: two humans take turns on the board.
 //   - Play vs Computer (Easy): you are X, the computer is O and plays a
 //     random empty cell after a short "thinking" pause.
+//   - Play vs Computer (Medium): a casual opponent. Most of the time it
+//     plays smart (win / block / center / corner), but sometimes it plays a
+//     random square, so it stays beatable and less predictable.
 //
-// Not built yet: Medium AI and Impossible (minimax) AI.
+// Not built yet: Impossible (minimax) AI.
 
 // ---------------------------------------------------------------------------
 // Screen switching
@@ -72,8 +75,16 @@ let board = ["", "", "", "", "", "", "", "", ""];
 let currentPlayer = "X";   // X always goes first
 let gameOver = false;      // becomes true once someone wins or it's a draw
 
-// "player" = two humans. "easy" = human is X, computer is O (random moves).
+// Game mode:
+//   "player" = two humans
+//   "easy"   = human is X, computer is O, computer plays random moves
+//   "medium" = human is X, computer is O, computer plays smarter moves
 let gameMode = "player";
+
+// True whenever the computer is one of the players (easy or medium).
+function isComputerMode() {
+  return gameMode === "easy" || gameMode === "medium";
+}
 
 // While the computer is "thinking", we lock the board so the human can't move.
 let lockBoard = false;
@@ -112,7 +123,7 @@ function placeMark(index, player) {
 
 // Set the "whose turn" line, using different words for each mode.
 function showTurnStatus() {
-  if (gameMode === "easy") {
+  if (isComputerMode()) {
     statusText.textContent = currentPlayer === "X" ? "Your turn" : "Computer thinking...";
   } else {
     statusText.textContent = "Player " + currentPlayer + "'s turn";
@@ -121,8 +132,8 @@ function showTurnStatus() {
 
 // Build the win message for the given winner, depending on the mode.
 function winMessage(winner) {
-  if (gameMode === "easy") {
-    // In easy mode the human is X and the computer is O.
+  if (isComputerMode()) {
+    // Against the computer the human is X and the computer is O.
     return winner === "X" ? "You win!" : "Computer wins!";
   }
   return "Player " + winner + " wins!";
@@ -149,29 +160,112 @@ function checkGameEnd() {
   return false;
 }
 
-// The computer's (Easy) move: pick a random empty cell and play O there.
+// --- Helpers the computer uses to choose a move ---
+
+// Return the indexes of every empty cell (so we only ever pick empty ones).
+function emptyIndexes() {
+  const result = [];
+  board.forEach((value, index) => {
+    if (value === "") {
+      result.push(index);
+    }
+  });
+  return result;
+}
+
+// Pick a random item from a list.
+function randomFrom(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+// If "player" has two marks in a line with the third cell empty, return that
+// empty cell's index (the move that would complete the line). Otherwise null.
+// Used both to find the computer's own winning move and to block the human.
+function findCompletingMove(player) {
+  for (const line of WINNING_LINES) {
+    const marks = line.map((i) => board[i]);
+    const ownCount = marks.filter((m) => m === player).length;
+    const emptyCount = marks.filter((m) => m === "").length;
+    if (ownCount === 2 && emptyCount === 1) {
+      return line[marks.indexOf("")]; // the one empty cell in this line
+    }
+  }
+  return null;
+}
+
+// Easy: just pick a random empty cell.
+function chooseEasyMove() {
+  const empties = emptyIndexes();
+  return empties.length > 0 ? randomFrom(empties) : null;
+}
+
+// How often Medium uses its smart logic (0.65 = about 65% of the time).
+// The rest of the time it just plays a random empty square, which keeps it
+// beatable and less predictable than a perfect player.
+const MEDIUM_SMART_CHANCE = 0.65;
+
+// The "smart" part of Medium: a simple priority order.
+function chooseMediumSmartMove() {
+  // 1. Take an immediate win if there is one (computer is O).
+  let move = findCompletingMove("O");
+  if (move !== null) {
+    return move;
+  }
+
+  // 2. Otherwise block the human (X) if they are about to win.
+  move = findCompletingMove("X");
+  if (move !== null) {
+    return move;
+  }
+
+  // 3. Take the center if it is open.
+  if (board[4] === "") {
+    return 4;
+  }
+
+  // 4. Take a random open corner.
+  const openCorners = [0, 2, 6, 8].filter((i) => board[i] === "");
+  if (openCorners.length > 0) {
+    return randomFrom(openCorners);
+  }
+
+  // 5. Fall back to any random empty square.
+  const empties = emptyIndexes();
+  return empties.length > 0 ? randomFrom(empties) : null;
+}
+
+// Medium: mix smart play with random play so it feels like a casual opponent.
+//   - ~65% of turns: use the smart priority logic above.
+//   - ~35% of turns: ignore strategy and just pick a random empty square.
+function chooseMediumMove() {
+  if (Math.random() < MEDIUM_SMART_CHANCE) {
+    return chooseMediumSmartMove();
+  }
+  return chooseEasyMove(); // a plain random empty square
+}
+
+// Pick the computer's move based on the current difficulty.
+function chooseComputerMove() {
+  if (gameMode === "medium") {
+    return chooseMediumMove();
+  }
+  return chooseEasyMove(); // easy (and any other computer mode for now)
+}
+
+// The computer's move: choose a cell, play O there, then hand back to the human.
 function computerMove() {
-  // Safety checks: never move if the game is already over.
+  // Safety check: never move if the game is already over.
   if (gameOver) {
     lockBoard = false;
     return;
   }
 
-  // Collect the indexes of all empty cells, so we only ever pick an empty one.
-  const emptyCells = [];
-  board.forEach((value, index) => {
-    if (value === "") {
-      emptyCells.push(index);
-    }
-  });
-
-  if (emptyCells.length === 0) {
+  const choice = chooseComputerMove();
+  if (choice === null) {
     lockBoard = false;
-    return;
+    return; // no empty cells left
   }
 
-  // Choose one of the empty cells at random.
-  const choice = emptyCells[Math.floor(Math.random() * emptyCells.length)];
   placeMark(choice, "O");
 
   // The computer's turn is done, so unlock the board for the human.
@@ -197,8 +291,8 @@ function handleCellClick(event) {
     return;
   }
 
-  // In easy mode the human only ever places X.
-  if (gameMode === "easy" && currentPlayer !== "X") {
+  // Against the computer the human only ever places X.
+  if (isComputerMode() && currentPlayer !== "X") {
     return;
   }
 
@@ -212,9 +306,9 @@ function handleCellClick(event) {
   currentPlayer = currentPlayer === "X" ? "O" : "X";
   showTurnStatus();
 
-  // In easy mode, once it is the computer's turn (O), let it move after a
-  // short, slightly random pause (about 400-600ms).
-  if (gameMode === "easy" && currentPlayer === "O" && !gameOver) {
+  // Against the computer, once it is O's turn, let it move after a short,
+  // slightly random pause (about 400-600ms).
+  if (isComputerMode() && currentPlayer === "O" && !gameOver) {
     lockBoard = true;
     statusText.textContent = "Computer thinking...";
     const delay = 400 + Math.floor(Math.random() * 200);
@@ -233,7 +327,13 @@ function resetGame() {
   lockBoard = false;
 
   // Title and status both depend on the current mode.
-  boardTitle.textContent = gameMode === "easy" ? "Play vs Computer (Easy)" : "Play vs Player";
+  if (gameMode === "easy") {
+    boardTitle.textContent = "Play vs Computer (Easy)";
+  } else if (gameMode === "medium") {
+    boardTitle.textContent = "Play vs Computer (Medium)";
+  } else {
+    boardTitle.textContent = "Play vs Player";
+  }
   showTurnStatus();
 
   // Wipe the marks and any highlight/color classes off every cell.
