@@ -1,23 +1,86 @@
 <!DOCTYPE html>
 <!--
-  Tic Tac Toe AI - web version (work in progress)
+  Tic Tac Toe AI - web version
 
-  This is just the starting skeleton. The actual game is not built yet.
+  Step 1: a clean START SCREEN only. There is no real board or AI yet.
+  The page has a few "screens" (sections). Only one is visible at a time;
+  script.js shows/hides them when a button is clicked.
+
+  Files:
   - styles.css  controls how the page looks
-  - script.js   will hold the game logic
+  - script.js   handles the button clicks (switching screens)
 -->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tic Tac Toe AI</title>
-    <link rel="stylesheet" href="styles.css" />
+    <!-- The "?v=2" forces the browser to reload the latest CSS instead of
+         showing an old cached copy. Bump the number after future edits. -->
+    <link rel="stylesheet" href="styles.css?v=3" />
   </head>
   <body>
-    <h1>Tic Tac Toe AI</h1>
-    <p>Web version coming soon.</p>
+    <!-- The card sits in the middle of the page and holds every screen. -->
+    <main class="card">
+      <!-- ===== Start screen (visible first) ===== -->
+      <section id="start-screen" class="screen">
+        <h1 class="title">Tic Tac Toe AI</h1>
+        <p class="subtitle">Choose a mode and challenge the computer.</p>
 
-    <!-- Game logic lives here. "defer" makes it run after the page loads. -->
+        <div class="button-group">
+          <!-- data-target tells script.js which screen to show on click. -->
+          <button class="btn" data-target="player-screen">Play vs Player</button>
+          <button class="btn" data-target="computer-screen">Play vs Computer</button>
+          <button class="btn btn-secondary" data-target="how-screen">How to Play</button>
+        </div>
+      </section>
+
+      <!-- ===== Play vs Player: the real game board ===== -->
+      <section id="player-screen" class="screen hidden">
+        <h2 class="title">Play vs Player</h2>
+
+        <!-- Status line: whose turn it is, or the result. -->
+        <p id="status" class="subtitle">Player X's turn</p>
+
+        <!-- The 3x3 board. Each cell is a button so it is easy to click
+             and works with the keyboard too. data-index is 0..8. -->
+        <div id="board" class="board">
+          <button class="cell" data-index="0"></button>
+          <button class="cell" data-index="1"></button>
+          <button class="cell" data-index="2"></button>
+          <button class="cell" data-index="3"></button>
+          <button class="cell" data-index="4"></button>
+          <button class="cell" data-index="5"></button>
+          <button class="cell" data-index="6"></button>
+          <button class="cell" data-index="7"></button>
+          <button class="cell" data-index="8"></button>
+        </div>
+
+        <div class="button-group">
+          <!-- id="restart" is handled separately in script.js (not a screen
+               switch), so it has no data-target. -->
+          <button id="restart" class="btn">Restart</button>
+          <button class="btn btn-secondary" data-target="start-screen">Back to Menu</button>
+        </div>
+      </section>
+
+      <!-- ===== Placeholder: Play vs Computer (hidden until clicked) ===== -->
+      <section id="computer-screen" class="screen hidden">
+        <h2 class="title">Play vs Computer</h2>
+        <p class="subtitle">Difficulty selection and AI are coming soon.</p>
+        <button class="btn btn-secondary" data-target="start-screen">Back</button>
+      </section>
+
+      <!-- ===== Placeholder: How to Play (hidden until clicked) ===== -->
+      <section id="how-screen" class="screen hidden">
+        <h2 class="title">How to Play</h2>
+        <p class="subtitle">Take turns placing X and O.</p>
+        <p class="subtitle">Get three in a row to win.</p>
+        <button class="btn btn-secondary" data-target="start-screen">Back</button>
+      </section>
+    </main>
+
+    <!-- "defer" makes the script run after the page has loaded. -->
     <script src="script.js" defer></script>
   </body>
 </html>
