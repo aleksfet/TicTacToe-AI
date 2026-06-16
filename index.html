@@ -15,9 +15,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tic Tac Toe AI</title>
-    <!-- The "?v=2" forces the browser to reload the latest CSS instead of
+    <!-- The "?v=" forces the browser to reload the latest CSS instead of
          showing an old cached copy. Bump the number after future edits. -->
-    <link rel="stylesheet" href="styles.css?v=3" />
+    <link rel="stylesheet" href="styles.css?v=4" />
   </head>
   <body>
     <!-- The card sits in the middle of the page and holds every screen. -->
@@ -28,16 +28,18 @@
         <p class="subtitle">Choose a mode and challenge the computer.</p>
 
         <div class="button-group">
-          <!-- data-target tells script.js which screen to show on click. -->
-          <button class="btn" data-target="player-screen">Play vs Player</button>
+          <!-- data-target tells script.js which screen to show on click.
+               data-mode tells it which kind of game to start on the board. -->
+          <button class="btn" data-target="player-screen" data-mode="player">Play vs Player</button>
           <button class="btn" data-target="computer-screen">Play vs Computer</button>
           <button class="btn btn-secondary" data-target="how-screen">How to Play</button>
         </div>
       </section>
 
-      <!-- ===== Play vs Player: the real game board ===== -->
+      <!-- ===== Game board (used by both Play vs Player and Easy mode) ===== -->
       <section id="player-screen" class="screen hidden">
-        <h2 class="title">Play vs Player</h2>
+        <!-- The title changes depending on the mode (set by script.js). -->
+        <h2 id="board-title" class="title">Play vs Player</h2>
 
         <!-- Status line: whose turn it is, or the result. -->
         <p id="status" class="subtitle">Player X's turn</p>
@@ -64,11 +66,19 @@
         </div>
       </section>
 
-      <!-- ===== Placeholder: Play vs Computer (hidden until clicked) ===== -->
+      <!-- ===== Difficulty menu (shown for Play vs Computer) ===== -->
       <section id="computer-screen" class="screen hidden">
-        <h2 class="title">Play vs Computer</h2>
-        <p class="subtitle">Difficulty selection and AI are coming soon.</p>
-        <button class="btn btn-secondary" data-target="start-screen">Back</button>
+        <h2 class="title">Choose Difficulty</h2>
+        <p class="subtitle">You play as X. The computer plays as O.</p>
+
+        <div class="button-group">
+          <!-- Easy starts a game on the board in "easy" computer mode. -->
+          <button class="btn" data-target="player-screen" data-mode="easy">Easy</button>
+          <!-- Medium and Impossible are not built yet, so they are disabled. -->
+          <button class="btn" disabled>Medium (coming soon)</button>
+          <button class="btn" disabled>Impossible (coming soon)</button>
+          <button class="btn btn-secondary" data-target="start-screen">Back</button>
+        </div>
       </section>
 
       <!-- ===== Placeholder: How to Play (hidden until clicked) ===== -->
@@ -80,7 +90,8 @@
       </section>
     </main>
 
-    <!-- "defer" makes the script run after the page has loaded. -->
-    <script src="script.js" defer></script>
+    <!-- "defer" makes the script run after the page has loaded.
+         The "?v=" works like the CSS one: it forces a fresh copy. -->
+    <script src="script.js?v=2" defer></script>
   </body>
 </html>

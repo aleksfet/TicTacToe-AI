@@ -1,10 +1,12 @@
 // Tic Tac Toe AI - game logic
 //
 // What works so far:
-//   - Screen switching (start menu <-> placeholder screens <-> the board).
-//   - A playable two-player game on the board (Play vs Player).
+//   - Screen switching (start menu <-> difficulty menu <-> the board).
+//   - Play vs Player: two humans take turns on the board.
+//   - Play vs Computer (Easy): you are X, the computer is O and plays a
+//     random empty cell after a short "thinking" pause.
 //
-// Not built yet: computer AI and the Easy/Medium/Impossible difficulty logic.
+// Not built yet: Medium AI and Impossible (minimax) AI.
 
 // ---------------------------------------------------------------------------
 // Screen switching
@@ -13,6 +15,8 @@
 //   - Only one is visible; the rest have the "hidden" class.
 //   - Any button with a data-target attribute, when clicked, hides every
 //     screen and then shows the screen whose id matches that data-target.
+//   - A button can also carry data-mode ("player" or "easy") to say which
+//     kind of game to start when it opens the board.
 // ---------------------------------------------------------------------------
 
 const screens = document.querySelectorAll(".screen");
@@ -20,6 +24,9 @@ const navButtons = document.querySelectorAll("[data-target]");
 
 // Show one screen by id and hide all the others.
 function showScreen(screenId) {
+  // Cancel any pending computer move so it can't fire on another screen.
+  clearTimeout(computerTimer);
+
   screens.forEach((screen) => {
     screen.classList.add("hidden");
   });
@@ -29,27 +36,32 @@ function showScreen(screenId) {
     target.classList.remove("hidden");
   }
 
-  // Starting "Play vs Player" should always begin a fresh game.
+  // Opening the board should always begin a fresh game.
   if (screenId === "player-screen") {
     resetGame();
   }
 }
 
-// When a button is clicked, switch to the screen it points at.
+// When a button is clicked, optionally set the game mode, then switch screens.
 navButtons.forEach((button) => {
   button.addEventListener("click", () => {
+    const mode = button.getAttribute("data-mode");
+    if (mode) {
+      gameMode = mode;   // "player" or "easy" (set before the board resets)
+    }
     const targetId = button.getAttribute("data-target");
     showScreen(targetId);
   });
 });
 
 // ---------------------------------------------------------------------------
-// The two-player game
+// The game
 // ---------------------------------------------------------------------------
 
 // Grab the parts of the board screen we need to read or update.
 const cells = document.querySelectorAll(".cell");
 const statusText = document.getElementById("status");
+const boardTitle = document.getElementById("board-title");
 const restartButton = document.getElementById("restart");
 
 // The board is a list of 9 strings: "", "X", or "O" (index 0..8).
@@ -59,6 +71,16 @@ const restartButton = document.getElementById("restart");
 let board = ["", "", "", "", "", "", "", "", ""];
 let currentPlayer = "X";   // X always goes first
 let gameOver = false;      // becomes true once someone wins or it's a draw
+
+// "player" = two humans. "easy" = human is X, computer is O (random moves).
+let gameMode = "player";
+
+// While the computer is "thinking", we lock the board so the human can't move.
+let lockBoard = false;
+
+// Remembers the pending "computer thinking" timer so we can cancel it if the
+// player restarts or leaves before the computer has moved.
+let computerTimer = null;
 
 // All eight winning lines, written as the three cell indexes that make them.
 const WINNING_LINES = [
@@ -79,50 +101,140 @@ function findWinningLine() {
   return null;
 }
 
+// Put a mark ("X" or "O") into a cell, both in the data and on the screen.
+function placeMark(index, player) {
+  board[index] = player;
+  const cell = cells[index];
+  cell.textContent = player;
+  cell.classList.add("taken");
+  cell.classList.add(player === "X" ? "x" : "o");
+}
+
+// Set the "whose turn" line, using different words for each mode.
+function showTurnStatus() {
+  if (gameMode === "easy") {
+    statusText.textContent = currentPlayer === "X" ? "Your turn" : "Computer thinking...";
+  } else {
+    statusText.textContent = "Player " + currentPlayer + "'s turn";
+  }
+}
+
+// Build the win message for the given winner, depending on the mode.
+function winMessage(winner) {
+  if (gameMode === "easy") {
+    // In easy mode the human is X and the computer is O.
+    return winner === "X" ? "You win!" : "Computer wins!";
+  }
+  return "Player " + winner + " wins!";
+}
+
+// Check whether the game just ended. If so, set gameOver + status and (for a
+// win) highlight the winning cells. Returns true when the game is over.
+function checkGameEnd() {
+  const winningLine = findWinningLine();
+  if (winningLine) {
+    gameOver = true;
+    statusText.textContent = winMessage(board[winningLine[0]]);
+    winningLine.forEach((i) => cells[i].classList.add("win"));
+    return true;
+  }
+
+  // Board full with no winner => draw.
+  if (board.every((value) => value !== "")) {
+    gameOver = true;
+    statusText.textContent = "It's a draw!";
+    return true;
+  }
+
+  return false;
+}
+
+// The computer's (Easy) move: pick a random empty cell and play O there.
+function computerMove() {
+  // Safety checks: never move if the game is already over.
+  if (gameOver) {
+    lockBoard = false;
+    return;
+  }
+
+  // Collect the indexes of all empty cells, so we only ever pick an empty one.
+  const emptyCells = [];
+  board.forEach((value, index) => {
+    if (value === "") {
+      emptyCells.push(index);
+    }
+  });
+
+  if (emptyCells.length === 0) {
+    lockBoard = false;
+    return;
+  }
+
+  // Choose one of the empty cells at random.
+  const choice = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+  placeMark(choice, "O");
+
+  // The computer's turn is done, so unlock the board for the human.
+  lockBoard = false;
+
+  if (checkGameEnd()) {
+    return;
+  }
+
+  // Hand the turn back to the human (X).
+  currentPlayer = "X";
+  showTurnStatus();
+}
+
 // Handle a click on one of the cells.
 function handleCellClick(event) {
   const cell = event.currentTarget;
   const index = Number(cell.getAttribute("data-index"));
 
-  // Ignore the click if the game is over or the cell is already filled.
-  if (gameOver || board[index] !== "") {
+  // Ignore the click if the game is over, the board is locked (computer is
+  // thinking), or the cell is already filled.
+  if (gameOver || lockBoard || board[index] !== "") {
     return;
   }
 
-  // Place the current player's mark in the data and on the screen.
-  board[index] = currentPlayer;
-  cell.textContent = currentPlayer;
-  cell.classList.add("taken");
-  cell.classList.add(currentPlayer === "X" ? "x" : "o");
-
-  // Did that move end the game?
-  const winningLine = findWinningLine();
-  if (winningLine) {
-    gameOver = true;
-    statusText.textContent = "Player " + currentPlayer + " wins!";
-    // Highlight the three winning cells.
-    winningLine.forEach((i) => cells[i].classList.add("win"));
+  // In easy mode the human only ever places X.
+  if (gameMode === "easy" && currentPlayer !== "X") {
     return;
   }
 
-  // If the board is full with no winner, it's a draw.
-  if (board.every((value) => value !== "")) {
-    gameOver = true;
-    statusText.textContent = "It's a draw!";
+  placeMark(index, currentPlayer);
+
+  if (checkGameEnd()) {
     return;
   }
 
-  // Otherwise switch players and update the status line.
+  // Switch to the other player.
   currentPlayer = currentPlayer === "X" ? "O" : "X";
-  statusText.textContent = "Player " + currentPlayer + "'s turn";
+  showTurnStatus();
+
+  // In easy mode, once it is the computer's turn (O), let it move after a
+  // short, slightly random pause (about 400-600ms).
+  if (gameMode === "easy" && currentPlayer === "O" && !gameOver) {
+    lockBoard = true;
+    statusText.textContent = "Computer thinking...";
+    const delay = 400 + Math.floor(Math.random() * 200);
+    computerTimer = setTimeout(computerMove, delay);
+  }
 }
 
 // Clear the board back to a fresh game (used by Restart and when entering).
 function resetGame() {
+  // Cancel a pending computer move so it can't land on the fresh board.
+  clearTimeout(computerTimer);
+
   board = ["", "", "", "", "", "", "", "", ""];
   currentPlayer = "X";
   gameOver = false;
-  statusText.textContent = "Player X's turn";
+  lockBoard = false;
+
+  // Title and status both depend on the current mode.
+  boardTitle.textContent = gameMode === "easy" ? "Play vs Computer (Easy)" : "Play vs Player";
+  showTurnStatus();
 
   // Wipe the marks and any highlight/color classes off every cell.
   cells.forEach((cell) => {
