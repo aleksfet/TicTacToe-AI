@@ -98,6 +98,21 @@ body {
   transform: scale(0.98);
 }
 
+/* Disabled buttons (e.g. Medium / Impossible) look faded and unclickable. */
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Keep a disabled button from changing color or pressing down on hover/click. */
+.btn:disabled:hover {
+  background: var(--btn);
+}
+
+.btn:disabled:active {
+  transform: none;
+}
+
 /* The lighter "Back" / "How to Play" style. */
 .btn-secondary {
   color: var(--text);
