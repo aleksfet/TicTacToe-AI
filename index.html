@@ -75,8 +75,7 @@
           <!-- Each button starts a game on the board in its computer mode. -->
           <button class="btn" data-target="player-screen" data-mode="easy">Easy</button>
           <button class="btn" data-target="player-screen" data-mode="medium">Medium</button>
-          <!-- Impossible is not built yet, so it stays disabled. -->
-          <button class="btn" disabled>Impossible (coming soon)</button>
+          <button class="btn" data-target="player-screen" data-mode="impossible">Impossible</button>
           <button class="btn btn-secondary" data-target="start-screen">Back</button>
         </div>
       </section>
@@ -92,6 +91,6 @@
 
     <!-- "defer" makes the script run after the page has loaded.
          The "?v=" works like the CSS one: it forces a fresh copy. -->
-    <script src="script.js?v=4" defer></script>
+    <script src="script.js?v=5" defer></script>
   </body>
 </html>

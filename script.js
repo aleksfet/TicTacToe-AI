@@ -8,8 +8,8 @@
 //   - Play vs Computer (Medium): a casual opponent. Most of the time it
 //     plays smart (win / block / center / corner), but sometimes it plays a
 //     random square, so it stays beatable and less predictable.
-//
-// Not built yet: Impossible (minimax) AI.
+//   - Play vs Computer (Impossible): uses the Minimax algorithm to always
+//     pick the best move, so the best you can do is draw.
 
 // ---------------------------------------------------------------------------
 // Screen switching
@@ -76,14 +76,15 @@ let currentPlayer = "X";   // X always goes first
 let gameOver = false;      // becomes true once someone wins or it's a draw
 
 // Game mode:
-//   "player" = two humans
-//   "easy"   = human is X, computer is O, computer plays random moves
-//   "medium" = human is X, computer is O, computer plays smarter moves
+//   "player"     = two humans
+//   "easy"       = human is X, computer is O, computer plays random moves
+//   "medium"     = human is X, computer is O, computer plays smarter moves
+//   "impossible" = human is X, computer is O, computer uses Minimax (perfect)
 let gameMode = "player";
 
-// True whenever the computer is one of the players (easy or medium).
+// True whenever the computer is one of the players.
 function isComputerMode() {
-  return gameMode === "easy" || gameMode === "medium";
+  return gameMode === "easy" || gameMode === "medium" || gameMode === "impossible";
 }
 
 // While the computer is "thinking", we lock the board so the human can't move.
@@ -244,10 +245,97 @@ function chooseMediumMove() {
   return chooseEasyMove(); // a plain random empty square
 }
 
+// --- Impossible mode: the Minimax algorithm ---
+
+// Check a *hypothetical* board (not the real one) and return its winner:
+// "X", "O", or null if nobody has three in a row yet.
+function winnerOf(state) {
+  for (const line of WINNING_LINES) {
+    const [a, b, c] = line;
+    if (state[a] !== "" && state[a] === state[b] && state[a] === state[c]) {
+      return state[a];
+    }
+  }
+  return null;
+}
+
+// Minimax looks ahead at EVERY possible way the game could finish and scores it:
+//   - O (the computer) tries to get the HIGHEST score  -> it "maximizes".
+//   - X (the human)    tries to get the LOWEST score   -> it "minimizes".
+// Scores: O win = +10, X win = -10, draw = 0. We also use "depth" (how many
+// moves deep we are) so the computer prefers winning sooner and losing later.
+//
+// "state" is a copy of the board that we change and then change back as we try
+// each possible move (this is called recursion: the function calls itself to
+// explore the next move).
+function minimax(state, computerToMove, depth) {
+  // First, see if this imagined board is already finished.
+  const winner = winnerOf(state);
+  if (winner === "O") {
+    return 10 - depth; // computer wins (sooner is better)
+  }
+  if (winner === "X") {
+    return depth - 10; // human wins (later is "less bad")
+  }
+  if (state.every((cell) => cell !== "")) {
+    return 0; // no empty cells and no winner => draw
+  }
+
+  if (computerToMove) {
+    // The computer (O) wants the highest score it can reach.
+    let bestScore = -Infinity;
+    for (let i = 0; i < 9; i++) {
+      if (state[i] === "") {
+        state[i] = "O";                                   // try this move
+        const score = minimax(state, false, depth + 1);   // human replies next
+        state[i] = "";                                    // undo the move
+        bestScore = Math.max(bestScore, score);
+      }
+    }
+    return bestScore;
+  } else {
+    // The human (X) is assumed to play their best, picking the lowest score.
+    let bestScore = Infinity;
+    for (let i = 0; i < 9; i++) {
+      if (state[i] === "") {
+        state[i] = "X";                                   // try this move
+        const score = minimax(state, true, depth + 1);    // computer replies next
+        state[i] = "";                                    // undo the move
+        bestScore = Math.min(bestScore, score);
+      }
+    }
+    return bestScore;
+  }
+}
+
+// Impossible: try every empty cell, score it with minimax, and keep the best.
+function chooseImpossibleMove() {
+  const state = board.slice(); // a copy we can safely experiment on
+  let bestScore = -Infinity;
+  let bestMove = null;
+
+  for (let i = 0; i < 9; i++) {
+    if (state[i] === "") {
+      state[i] = "O";                                 // imagine playing here
+      const score = minimax(state, false, 1);         // then the human moves
+      state[i] = "";                                  // undo
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = i;
+      }
+    }
+  }
+
+  return bestMove;
+}
+
 // Pick the computer's move based on the current difficulty.
 function chooseComputerMove() {
   if (gameMode === "medium") {
     return chooseMediumMove();
+  }
+  if (gameMode === "impossible") {
+    return chooseImpossibleMove();
   }
   return chooseEasyMove(); // easy (and any other computer mode for now)
 }
@@ -331,6 +419,8 @@ function resetGame() {
     boardTitle.textContent = "Play vs Computer (Easy)";
   } else if (gameMode === "medium") {
     boardTitle.textContent = "Play vs Computer (Medium)";
+  } else if (gameMode === "impossible") {
+    boardTitle.textContent = "Play vs Computer (Impossible)";
   } else {
     boardTitle.textContent = "Play vs Player";
   }
