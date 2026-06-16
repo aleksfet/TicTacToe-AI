@@ -1,13 +1,198 @@
 /*
-  Tic Tac Toe AI - styles (work in progress)
+  Tic Tac Toe AI - styles
 
-  Only basic page styling for now. We keep the light background to match
-  the original Python prototype.
+  Step 1: styling for the start screen and the placeholder screens.
+  The layout is a single centered "card" on a light background.
+
+  Beginner notes:
+  - Colors are written as #rrggbb (red/green/blue in hex).
+  - rem / px are size units. 1rem is the page's base font size.
+  - The ":root" block holds reusable values (CSS variables) so colors
+    only need to be changed in one place.
 */
 
+:root {
+  --bg-top: #f5f7fa;       /* light background, top of the gradient */
+  --bg-bottom: #e4e9f2;    /* light background, bottom of the gradient */
+  --card-bg: #ffffff;      /* white card */
+  --text: #1f2933;         /* near-black text */
+  --muted: #62707f;        /* softer gray for the subtitle */
+  --btn: #4f6df5;          /* main button blue */
+  --btn-hover: #3b58e0;    /* darker blue when hovered */
+  --btn-secondary: #e2e8f0;       /* light gray secondary button */
+  --btn-secondary-hover: #cbd5e1; /* slightly darker on hover */
+}
+
+/* Remove the default page margin and use a clean modern font. */
+* {
+  box-sizing: border-box;
+}
+
 body {
-  background-color: #e4e4e4; /* light gray, same idea as the Pygame version */
-  color: #000000;
-  font-family: "Times New Roman", serif;
+  margin: 0;
+  min-height: 100vh;            /* fill the whole window height */
+  display: flex;                /* center the card... */
+  align-items: center;          /* ...vertically... */
+  justify-content: center;      /* ...and horizontally */
+  padding: 1rem;
+  background: linear-gradient(160deg, var(--bg-top), var(--bg-bottom));
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+}
+
+/* The centered white card that holds the screens. */
+.card {
+  width: 100%;
+  max-width: 420px;             /* never gets too wide on big screens */
+  background: var(--card-bg);
+  border-radius: 20px;
+  padding: 2.5rem 2rem;
   text-align: center;
+  box-shadow: 0 12px 30px rgba(31, 41, 51, 0.12); /* soft drop shadow */
+}
+
+/* Only one screen shows at a time; ".hidden" removes it from view. */
+.hidden {
+  display: none;
+}
+
+.title {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  margin: 0.25rem 0;
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+/* Stack the buttons in a vertical column with even spacing. */
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 1.75rem;
+}
+
+/* Shared button look. */
+.btn {
+  border: none;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--btn);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+
+.btn:hover {
+  background: var(--btn-hover);
+}
+
+/* A tiny press-down effect when the button is clicked. */
+.btn:active {
+  transform: scale(0.98);
+}
+
+/* The lighter "Back" / "How to Play" style. */
+.btn-secondary {
+  color: var(--text);
+  background: var(--btn-secondary);
+  margin-top: 1.25rem;
+}
+
+.btn-secondary:hover {
+  background: var(--btn-secondary-hover);
+}
+
+/* --- The game board --- */
+
+/* A 3x3 grid of fixed 100px tracks => a 300px-ish square board.
+   Using explicit 100px tracks (instead of 1fr that depends on the parent's
+   height) means the board can NEVER collapse to the size of the text. */
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 100px);
+  grid-template-rows: repeat(3, 100px);
+  justify-content: center;   /* center the three columns inside the card */
+  gap: 8px;
+  margin: 1.5rem auto 0;
+}
+
+/* Each clickable square.
+   The appearance resets stop the browser from drawing these <button>s as
+   small native form controls, which is what made them look like tiny dashes. */
+.cell {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100px;
+  height: 100px;          /* explicit square size, not dependent on the grid */
+  margin: 0;
+  padding: 0;
+  border: 2px solid #cbd5e1;   /* clear light-gray border around each cell */
+  border-radius: 12px;
+  background: #eef1f7;
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.cell:hover {
+  background: #e2e7f2;
+}
+
+/* Once a cell is filled it should not look clickable any more. */
+.cell.taken {
+  cursor: default;
+}
+
+.cell.taken:hover {
+  background: #eef1f7;
+}
+
+/* Give X and O their own colors so the board is easy to read. */
+.cell.x {
+  color: #4f6df5;   /* blue, same family as the main button */
+}
+
+.cell.o {
+  color: #e0567a;   /* warm pink/red */
+}
+
+/* The three cells of a winning line get highlighted. */
+.cell.win {
+  background: #c8f7d4;   /* soft green */
+}
+
+.cell.win:hover {
+  background: #c8f7d4;
+}
+
+/* --- Responsive: shrink the board so it fits very narrow phones. --- */
+@media (max-width: 400px) {
+  .card {
+    padding: 2rem 1.25rem;
+  }
+  .title {
+    font-size: 1.6rem;
+  }
+  .board {
+    grid-template-columns: repeat(3, 88px);
+    grid-template-rows: repeat(3, 88px);
+  }
+  .cell {
+    width: 88px;
+    height: 88px;
+    font-size: 2.4rem;
+  }
 }
