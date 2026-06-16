@@ -72,10 +72,10 @@
         <p class="subtitle">You play as X. The computer plays as O.</p>
 
         <div class="button-group">
-          <!-- Easy starts a game on the board in "easy" computer mode. -->
+          <!-- Each button starts a game on the board in its computer mode. -->
           <button class="btn" data-target="player-screen" data-mode="easy">Easy</button>
-          <!-- Medium and Impossible are not built yet, so they are disabled. -->
-          <button class="btn" disabled>Medium (coming soon)</button>
+          <button class="btn" data-target="player-screen" data-mode="medium">Medium</button>
+          <!-- Impossible is not built yet, so it stays disabled. -->
           <button class="btn" disabled>Impossible (coming soon)</button>
           <button class="btn btn-secondary" data-target="start-screen">Back</button>
         </div>
@@ -92,6 +92,6 @@
 
     <!-- "defer" makes the script run after the page has loaded.
          The "?v=" works like the CSS one: it forces a fresh copy. -->
-    <script src="script.js?v=2" defer></script>
+    <script src="script.js?v=4" defer></script>
   </body>
 </html>
