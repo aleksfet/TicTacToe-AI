@@ -43,7 +43,7 @@ body {
 /* The centered white card that holds the screens. */
 .card {
   width: 100%;
-  max-width: 420px;             /* never gets too wide on big screens */
+  max-width: 440px;             /* never gets too wide on big screens */
   background: var(--card-bg);
   border-radius: 20px;
   padding: 2.5rem 2rem;
@@ -67,6 +67,28 @@ body {
   color: var(--muted);
   font-size: 1rem;
 }
+
+/* The turn line ("Your turn", "Player X's turn") - a bit bigger and clearer
+   than a plain subtitle so it is easy to read during play. */
+#status {
+  color: var(--text);
+  font-size: 1.25rem;
+  font-weight: 600;
+  min-height: 1.5em;        /* reserve space so the layout doesn't jump */
+}
+
+/* When the game ends, #status also gets the "result" class to make the
+   outcome big and bold - it should feel like a real game result. */
+#status.result {
+  font-size: 2rem;
+  font-weight: 800;
+  margin-top: 0.4rem;
+}
+
+/* Result colors: X = blue, O/Computer = pink, draw = gold. */
+#status.result-x { color: var(--btn); }      /* same blue as X */
+#status.result-o { color: #e0567a; }         /* same pink as O */
+#status.result-draw { color: #c79a2e; }      /* neutral gold */
 
 /* Stack the buttons in a vertical column with even spacing. */
 .button-group {
@@ -124,17 +146,31 @@ body {
   background: var(--btn-secondary-hover);
 }
 
+/* A difficulty option: the button with its short description tucked under it. */
+.option {
+  display: flex;
+  flex-direction: column;
+}
+
+.option-desc {
+  margin: 0.3rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 /* --- The game board --- */
 
-/* A 3x3 grid of fixed 100px tracks => a 300px-ish square board.
-   Using explicit 100px tracks (instead of 1fr that depends on the parent's
-   height) means the board can NEVER collapse to the size of the text. */
+/* A 3x3 square board, about 360px on desktop. "width: min(360px, 100%)" keeps
+   it 360px normally but lets it shrink on narrow screens; "aspect-ratio: 1"
+   keeps it square; defining BOTH rows and columns (so they each fill 1/3 of
+   the height) is what stops the cells collapsing to the size of the text. */
 .board {
   display: grid;
-  grid-template-columns: repeat(3, 100px);
-  grid-template-rows: repeat(3, 100px);
-  justify-content: center;   /* center the three columns inside the card */
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
   gap: 8px;
+  width: min(360px, 100%);
+  aspect-ratio: 1;
   margin: 1.5rem auto 0;
 }
 
@@ -144,14 +180,14 @@ body {
 .cell {
   appearance: none;
   -webkit-appearance: none;
-  width: 100px;
-  height: 100px;          /* explicit square size, not dependent on the grid */
+  width: 100%;
+  height: 100%;           /* fill its grid track so the cell stays square */
   margin: 0;
   padding: 0;
   border: 2px solid #cbd5e1;   /* clear light-gray border around each cell */
   border-radius: 12px;
   background: #eef1f7;
-  font-size: 3rem;
+  font-size: 3.4rem;
   font-weight: 700;
   line-height: 1;
   color: var(--text);
@@ -193,7 +229,8 @@ body {
   background: #c8f7d4;
 }
 
-/* --- Responsive: shrink the board so it fits very narrow phones. --- */
+/* --- Responsive: the board shrinks on its own (width: min(360px, 100%)),
+   so here we just ease down the text sizes on very narrow phones. --- */
 @media (max-width: 400px) {
   .card {
     padding: 2rem 1.25rem;
@@ -201,13 +238,7 @@ body {
   .title {
     font-size: 1.6rem;
   }
-  .board {
-    grid-template-columns: repeat(3, 88px);
-    grid-template-rows: repeat(3, 88px);
-  }
   .cell {
-    width: 88px;
-    height: 88px;
-    font-size: 2.4rem;
+    font-size: 2.6rem;
   }
 }

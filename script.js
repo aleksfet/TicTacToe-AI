@@ -122,8 +122,15 @@ function placeMark(index, player) {
   cell.classList.add(player === "X" ? "x" : "o");
 }
 
+// Remove the big "result" styling from the status line (used when a new turn
+// or a new game starts, so the turn text looks normal again).
+function clearResultStyle() {
+  statusText.classList.remove("result", "result-x", "result-o", "result-draw");
+}
+
 // Set the "whose turn" line, using different words for each mode.
 function showTurnStatus() {
+  clearResultStyle();
   if (isComputerMode()) {
     statusText.textContent = currentPlayer === "X" ? "Your turn" : "Computer thinking...";
   } else {
@@ -146,7 +153,10 @@ function checkGameEnd() {
   const winningLine = findWinningLine();
   if (winningLine) {
     gameOver = true;
-    statusText.textContent = winMessage(board[winningLine[0]]);
+    const winner = board[winningLine[0]];
+    statusText.textContent = winMessage(winner);
+    // Big result text, colored to match the winner (X = blue, O = pink).
+    statusText.classList.add("result", winner === "X" ? "result-x" : "result-o");
     winningLine.forEach((i) => cells[i].classList.add("win"));
     return true;
   }
@@ -155,6 +165,8 @@ function checkGameEnd() {
   if (board.every((value) => value !== "")) {
     gameOver = true;
     statusText.textContent = "It's a draw!";
+    // Big result text in a neutral gold color.
+    statusText.classList.add("result", "result-draw");
     return true;
   }
 
