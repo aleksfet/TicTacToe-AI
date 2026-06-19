@@ -266,6 +266,16 @@ body {
   background: #c8f7d4;
 }
 
+/* The small note that explains the computer's last move. Subtle so it does
+   not distract; min-height reserves space so the layout doesn't jump. */
+#ai-explanation {
+  margin: 0.75rem auto 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--muted);
+  min-height: 1.1em;
+}
+
 /* --- Responsive: the board shrinks on its own (width: min(360px, 100%)),
    so here we just ease down the text sizes on very narrow phones. --- */
 @media (max-width: 400px) {
