@@ -50,7 +50,8 @@ navButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const mode = button.getAttribute("data-mode");
     if (mode) {
-      gameMode = mode;   // "player" or "easy" (set before the board resets)
+      gameMode = mode;   // "player", "easy", "medium", or "impossible"
+      resetScores();     // choosing a mode starts a fresh scoreboard
     }
     const targetId = button.getAttribute("data-target");
     showScreen(targetId);
@@ -66,6 +67,18 @@ const cells = document.querySelectorAll(".cell");
 const statusText = document.getElementById("status");
 const boardTitle = document.getElementById("board-title");
 const restartButton = document.getElementById("restart");
+const resetScoreButton = document.getElementById("reset-score");
+
+// Scoreboard pieces: the two labels that change per mode, and the three values.
+const scoreLabelX = document.getElementById("score-label-x");
+const scoreLabelO = document.getElementById("score-label-o");
+const scoreValueX = document.getElementById("score-x");
+const scoreValueO = document.getElementById("score-o");
+const scoreValueDraws = document.getElementById("score-draws");
+
+// Session scores. "x" counts X / You wins, "o" counts O / Computer wins.
+// (The human is always X and the computer is always O, so this lines up.)
+let scores = { x: 0, o: 0, draws: 0 };
 
 // The board is a list of 9 strings: "", "X", or "O" (index 0..8).
 //   0 | 1 | 2
@@ -147,6 +160,44 @@ function winMessage(winner) {
   return "Player " + winner + " wins!";
 }
 
+// --- Scoreboard ---
+
+// Set the two changing labels to match the mode ("X"/"O" or "You"/"Computer").
+function updateScoreLabels() {
+  if (isComputerMode()) {
+    scoreLabelX.textContent = "You";
+    scoreLabelO.textContent = "Computer";
+  } else {
+    scoreLabelX.textContent = "X";
+    scoreLabelO.textContent = "O";
+  }
+}
+
+// Copy the score numbers onto the screen.
+function renderScores() {
+  scoreValueX.textContent = scores.x;
+  scoreValueO.textContent = scores.o;
+  scoreValueDraws.textContent = scores.draws;
+}
+
+// Zero the scores (used when a brand new mode is chosen from the menu).
+function resetScores() {
+  scores = { x: 0, o: 0, draws: 0 };
+  renderScores();
+}
+
+// Add one to the right bucket after a game ends. Pass "X", "O", or null (draw).
+function recordResult(winner) {
+  if (winner === "X") {
+    scores.x += 1;
+  } else if (winner === "O") {
+    scores.o += 1;
+  } else {
+    scores.draws += 1;
+  }
+  renderScores();
+}
+
 // Check whether the game just ended. If so, set gameOver + status and (for a
 // win) highlight the winning cells. Returns true when the game is over.
 function checkGameEnd() {
@@ -158,6 +209,7 @@ function checkGameEnd() {
     // Big result text, colored to match the winner (X = blue, O = pink).
     statusText.classList.add("result", winner === "X" ? "result-x" : "result-o");
     winningLine.forEach((i) => cells[i].classList.add("win"));
+    recordResult(winner);
     return true;
   }
 
@@ -167,6 +219,7 @@ function checkGameEnd() {
     statusText.textContent = "It's a draw!";
     // Big result text in a neutral gold color.
     statusText.classList.add("result", "result-draw");
+    recordResult(null);
     return true;
   }
 
@@ -436,6 +489,12 @@ function resetGame() {
   } else {
     boardTitle.textContent = "Play vs Player";
   }
+
+  // Keep the scoreboard labels/values in step with the mode. (Restart calls
+  // resetGame, so this refreshes the display WITHOUT zeroing the scores.)
+  updateScoreLabels();
+  renderScores();
+
   showTurnStatus();
 
   // Wipe the marks and any highlight/color classes off every cell.
@@ -445,6 +504,15 @@ function resetGame() {
   });
 }
 
-// Wire up the cell clicks and the Restart button.
+// Wire up the cell clicks and the buttons.
 cells.forEach((cell) => cell.addEventListener("click", handleCellClick));
+
+// Restart Game: clear the board only, keeping the scoreboard.
 restartButton.addEventListener("click", resetGame);
+
+// Reset Score: zero the scoreboard AND start a clean board, so the player gets
+// a fresh game with the score back to 0.
+resetScoreButton.addEventListener("click", () => {
+  resetScores();
+  resetGame();
+});
