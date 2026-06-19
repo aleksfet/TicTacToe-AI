@@ -11,16 +11,71 @@
     only need to be changed in one place.
 */
 
+/* The default values here are the "Classic Arena" theme. The other themes
+   (Neon, Sunset) just override these variables on the <body> element, so the
+   whole page recolors at once. */
 :root {
   --bg-top: #f5f7fa;       /* light background, top of the gradient */
   --bg-bottom: #e4e9f2;    /* light background, bottom of the gradient */
   --card-bg: #ffffff;      /* white card */
+  --card-shadow: rgba(31, 41, 51, 0.12); /* soft card shadow */
   --text: #1f2933;         /* near-black text */
   --muted: #62707f;        /* softer gray for the subtitle */
   --btn: #4f6df5;          /* main button blue */
   --btn-hover: #3b58e0;    /* darker blue when hovered */
   --btn-secondary: #e2e8f0;       /* light gray secondary button */
   --btn-secondary-hover: #cbd5e1; /* slightly darker on hover */
+  --cell-bg: #eef1f7;      /* board cell / scoreboard background */
+  --cell-hover: #e2e7f2;   /* cell background on hover */
+  --cell-border: #cbd5e1;  /* cell border */
+  --x-color: #4f6df5;      /* the X mark (and X score / X win text) */
+  --o-color: #e0567a;      /* the O mark (and O score / O win text) */
+  --win-bg: #c8f7d4;       /* highlight behind a winning line */
+  --draw-color: #c79a2e;   /* "It's a draw!" text color */
+  --cell-glow: none;       /* optional glow (only the Neon theme uses it) */
+}
+
+/* ===== Ocean Arena: light aqua background with blue accents ===== */
+.theme-ocean {
+  --bg-top: #e3f6fc;
+  --bg-bottom: #aeddf0;
+  --card-bg: #ffffff;
+  --card-shadow: rgba(2, 119, 189, 0.22);
+  --text: #0b3954;         /* deep navy text */
+  --muted: #4a7a96;
+  --btn: #0288d1;          /* ocean blue */
+  --btn-hover: #0277bd;
+  --btn-secondary: #d4ecf7;
+  --btn-secondary-hover: #bfe2f2;
+  --cell-bg: #eaf6fc;
+  --cell-hover: #d8eef9;
+  --cell-border: #8fcdec;
+  --x-color: #0277bd;      /* blue */
+  --o-color: #00897b;      /* teal */
+  --win-bg: #b2f0e6;
+  --draw-color: #00838f;
+}
+
+/* ===== Neon Arena: dark blue-purple with glowing marks ===== */
+.theme-neon {
+  --bg-top: #1c1140;
+  --bg-bottom: #0c0820;
+  --card-bg: #1e1645;
+  --card-shadow: rgba(124, 77, 255, 0.35);
+  --text: #f1ecff;
+  --muted: #a99fd0;
+  --btn: #7c4dff;
+  --btn-hover: #9670ff;
+  --btn-secondary: #2c2358;
+  --btn-secondary-hover: #3a2f70;
+  --cell-bg: #2a2158;
+  --cell-hover: #352a70;
+  --cell-border: #5a4aa8;
+  --x-color: #4fe3ff;      /* cyan */
+  --o-color: #ff5fa2;      /* magenta-pink */
+  --win-bg: #2f6b54;
+  --draw-color: #ffd166;
+  --cell-glow: 0 0 12px rgba(124, 77, 255, 0.35);
 }
 
 /* Remove the default page margin and use a clean modern font. */
@@ -38,6 +93,7 @@ body {
   background: linear-gradient(160deg, var(--bg-top), var(--bg-bottom));
   color: var(--text);
   font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 /* The centered white card that holds the screens. */
@@ -48,7 +104,8 @@ body {
   border-radius: 20px;
   padding: 2.5rem 2rem;
   text-align: center;
-  box-shadow: 0 12px 30px rgba(31, 41, 51, 0.12); /* soft drop shadow */
+  box-shadow: 0 12px 30px var(--card-shadow); /* soft drop shadow */
+  transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
 /* Only one screen shows at a time; ".hidden" removes it from view. */
@@ -85,10 +142,10 @@ body {
   margin-top: 0.4rem;
 }
 
-/* Result colors: X = blue, O/Computer = pink, draw = gold. */
-#status.result-x { color: var(--btn); }      /* same blue as X */
-#status.result-o { color: #e0567a; }         /* same pink as O */
-#status.result-draw { color: #c79a2e; }      /* neutral gold */
+/* Result colors follow the theme: X color, O color, and a neutral draw color. */
+#status.result-x { color: var(--x-color); }
+#status.result-o { color: var(--o-color); }
+#status.result-draw { color: var(--draw-color); }
 
 /* Stack the buttons in a vertical column with even spacing. */
 .button-group {
@@ -158,6 +215,51 @@ body {
   color: var(--muted);
 }
 
+/* --- Arena (theme) picker on the start screen --- */
+.arena-picker {
+  margin-top: 1.75rem;
+}
+
+.arena-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.arena-buttons {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.arena-btn {
+  flex: 1;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 2px solid var(--cell-border);
+  border-radius: 10px;
+  padding: 0.5rem 0.4rem;
+  background: var(--cell-bg);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.arena-btn:hover {
+  background: var(--cell-hover);
+}
+
+/* The currently selected arena gets a colored outline. */
+.arena-btn.active {
+  border-color: var(--btn);
+  color: var(--btn);
+}
+
 /* --- The scoreboard (three little stat boxes above the board) --- */
 .scoreboard {
   display: flex;
@@ -169,7 +271,7 @@ body {
 .score-item {
   flex: 1;
   max-width: 110px;
-  background: #eef1f7;          /* same light tint as the cells */
+  background: var(--cell-bg);   /* same tint as the cells */
   border-radius: 12px;
   padding: 0.5rem 0.4rem;
   display: flex;
@@ -192,8 +294,8 @@ body {
 }
 
 /* Tint the X and O scores to match their marks on the board. */
-#score-x { color: var(--btn); }   /* blue, like X */
-#score-o { color: #e0567a; }      /* pink, like O */
+#score-x { color: var(--x-color); }
+#score-o { color: var(--o-color); }
 
 /* --- The game board --- */
 
@@ -221,9 +323,10 @@ body {
   height: 100%;           /* fill its grid track so the cell stays square */
   margin: 0;
   padding: 0;
-  border: 2px solid #cbd5e1;   /* clear light-gray border around each cell */
+  border: 2px solid var(--cell-border);   /* clear border around each cell */
   border-radius: 12px;
-  background: #eef1f7;
+  background: var(--cell-bg);
+  box-shadow: var(--cell-glow);            /* glow only in the Neon theme */
   font-size: 3.4rem;
   font-weight: 700;
   line-height: 1;
@@ -236,7 +339,7 @@ body {
 }
 
 .cell:hover {
-  background: #e2e7f2;
+  background: var(--cell-hover);
 }
 
 /* Once a cell is filled it should not look clickable any more. */
@@ -245,25 +348,25 @@ body {
 }
 
 .cell.taken:hover {
-  background: #eef1f7;
+  background: var(--cell-bg);
 }
 
 /* Give X and O their own colors so the board is easy to read. */
 .cell.x {
-  color: #4f6df5;   /* blue, same family as the main button */
+  color: var(--x-color);
 }
 
 .cell.o {
-  color: #e0567a;   /* warm pink/red */
+  color: var(--o-color);
 }
 
 /* The three cells of a winning line get highlighted. */
 .cell.win {
-  background: #c8f7d4;   /* soft green */
+  background: var(--win-bg);
 }
 
 .cell.win:hover {
-  background: #c8f7d4;
+  background: var(--win-bg);
 }
 
 /* The small note that explains the computer's last move. Subtle so it does

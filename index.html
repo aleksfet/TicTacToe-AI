@@ -17,7 +17,7 @@
     <title>Tic Tac Toe AI Arena</title>
     <!-- The "?v=" forces the browser to reload the latest CSS instead of
          showing an old cached copy. Bump the number after future edits. -->
-    <link rel="stylesheet" href="styles.css?v=7" />
+    <link rel="stylesheet" href="styles.css?v=9" />
   </head>
   <body>
     <!-- The card sits in the middle of the page and holds every screen. -->
@@ -33,6 +33,17 @@
           <button class="btn" data-target="player-screen" data-mode="player">Play vs Player</button>
           <button class="btn" data-target="computer-screen">Play vs Computer</button>
           <button class="btn btn-secondary" data-target="how-screen">How to Play</button>
+        </div>
+
+        <!-- Arena (theme) picker. data-theme tells script.js which theme class
+             to put on <body>. The chosen theme stays for the whole session. -->
+        <div class="arena-picker">
+          <p class="arena-title">Choose Arena</p>
+          <div class="arena-buttons">
+            <button class="arena-btn" data-theme="classic">Classic</button>
+            <button class="arena-btn" data-theme="ocean">Ocean</button>
+            <button class="arena-btn" data-theme="neon">Neon</button>
+          </div>
         </div>
       </section>
 
@@ -122,6 +133,6 @@
 
     <!-- "defer" makes the script run after the page has loaded.
          The "?v=" works like the CSS one: it forces a fresh copy. -->
-    <script src="script.js?v=9" defer></script>
+    <script src="script.js?v=11" defer></script>
   </body>
 </html>
