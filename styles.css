@@ -15,24 +15,24 @@
    (Neon, Sunset) just override these variables on the <body> element, so the
    whole page recolors at once. */
 :root {
-  --bg-top: #f5f7fa;       /* light background, top of the gradient */
-  --bg-bottom: #e4e9f2;    /* light background, bottom of the gradient */
-  --card-bg: #ffffff;      /* white card */
+  --bg-top: #f5f7fa; /* light background, top of the gradient */
+  --bg-bottom: #e4e9f2; /* light background, bottom of the gradient */
+  --card-bg: #ffffff; /* white card */
   --card-shadow: rgba(31, 41, 51, 0.12); /* soft card shadow */
-  --text: #1f2933;         /* near-black text */
-  --muted: #62707f;        /* softer gray for the subtitle */
-  --btn: #4f6df5;          /* main button blue */
-  --btn-hover: #3b58e0;    /* darker blue when hovered */
-  --btn-secondary: #e2e8f0;       /* light gray secondary button */
+  --text: #1f2933; /* near-black text */
+  --muted: #62707f; /* softer gray for the subtitle */
+  --btn: #4f6df5; /* main button blue */
+  --btn-hover: #3b58e0; /* darker blue when hovered */
+  --btn-secondary: #e2e8f0; /* light gray secondary button */
   --btn-secondary-hover: #cbd5e1; /* slightly darker on hover */
-  --cell-bg: #eef1f7;      /* board cell / scoreboard background */
-  --cell-hover: #e2e7f2;   /* cell background on hover */
-  --cell-border: #cbd5e1;  /* cell border */
-  --x-color: #4f6df5;      /* the X mark (and X score / X win text) */
-  --o-color: #e0567a;      /* the O mark (and O score / O win text) */
-  --win-bg: #c8f7d4;       /* highlight behind a winning line */
-  --draw-color: #c79a2e;   /* "It's a draw!" text color */
-  --cell-glow: none;       /* optional glow (only the Neon theme uses it) */
+  --cell-bg: #eef1f7; /* board cell / scoreboard background */
+  --cell-hover: #e2e7f2; /* cell background on hover */
+  --cell-border: #cbd5e1; /* cell border */
+  --x-color: #4f6df5; /* the X mark (and X score / X win text) */
+  --o-color: #e0567a; /* the O mark (and O score / O win text) */
+  --win-bg: #c8f7d4; /* highlight behind a winning line */
+  --draw-color: #c79a2e; /* "It's a draw!" text color */
+  --cell-glow: none; /* optional glow (only the Neon theme uses it) */
 }
 
 /* ===== Ocean Arena: light aqua background with blue accents ===== */
@@ -41,17 +41,17 @@
   --bg-bottom: #aeddf0;
   --card-bg: #ffffff;
   --card-shadow: rgba(2, 119, 189, 0.22);
-  --text: #0b3954;         /* deep navy text */
+  --text: #0b3954; /* deep navy text */
   --muted: #4a7a96;
-  --btn: #0288d1;          /* ocean blue */
+  --btn: #0288d1; /* ocean blue */
   --btn-hover: #0277bd;
   --btn-secondary: #d4ecf7;
   --btn-secondary-hover: #bfe2f2;
   --cell-bg: #eaf6fc;
   --cell-hover: #d8eef9;
   --cell-border: #8fcdec;
-  --x-color: #0277bd;      /* blue */
-  --o-color: #00897b;      /* teal */
+  --x-color: #0277bd; /* blue */
+  --o-color: #00897b; /* teal */
   --win-bg: #b2f0e6;
   --draw-color: #00838f;
 }
@@ -71,8 +71,8 @@
   --cell-bg: #2a2158;
   --cell-hover: #352a70;
   --cell-border: #5a4aa8;
-  --x-color: #4fe3ff;      /* cyan */
-  --o-color: #ff5fa2;      /* magenta-pink */
+  --x-color: #4fe3ff; /* cyan */
+  --o-color: #ff5fa2; /* magenta-pink */
   --win-bg: #2f6b54;
   --draw-color: #ffd166;
   --cell-glow: 0 0 12px rgba(124, 77, 255, 0.35);
@@ -85,27 +85,36 @@
 
 body {
   margin: 0;
-  min-height: 100vh;            /* fill the whole window height */
-  display: flex;                /* center the card... */
-  align-items: center;          /* ...vertically... */
-  justify-content: center;      /* ...and horizontally */
+  min-height: 100vh; /* fill the whole window height */
+  display: flex; /* center the card... */
+  align-items: center; /* ...vertically... */
+  justify-content: center; /* ...and horizontally */
   padding: 1rem;
   background: linear-gradient(160deg, var(--bg-top), var(--bg-bottom));
   color: var(--text);
-  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
-  transition: background 0.2s ease, color 0.2s ease;
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    Arial,
+    sans-serif;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 /* The centered white card that holds the screens. */
 .card {
   width: 100%;
-  max-width: 440px;             /* never gets too wide on big screens */
+  max-width: 440px; /* never gets too wide on big screens */
   background: var(--card-bg);
   border-radius: 20px;
   padding: 2.5rem 2rem;
   text-align: center;
   box-shadow: 0 12px 30px var(--card-shadow); /* soft drop shadow */
-  transition: background 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 /* Only one screen shows at a time; ".hidden" removes it from view. */
@@ -131,7 +140,7 @@ body {
   color: var(--text);
   font-size: 1.25rem;
   font-weight: 600;
-  min-height: 1.5em;        /* reserve space so the layout doesn't jump */
+  min-height: 1.5em; /* reserve space so the layout doesn't jump */
 }
 
 /* When the game ends, #status also gets the "result" class to make the
@@ -143,9 +152,15 @@ body {
 }
 
 /* Result colors follow the theme: X color, O color, and a neutral draw color. */
-#status.result-x { color: var(--x-color); }
-#status.result-o { color: var(--o-color); }
-#status.result-draw { color: var(--draw-color); }
+#status.result-x {
+  color: var(--x-color);
+}
+#status.result-o {
+  color: var(--o-color);
+}
+#status.result-draw {
+  color: var(--draw-color);
+}
 
 /* Small difficulty badge under the match header (computer modes only). */
 .badge {
@@ -184,7 +199,9 @@ body {
   color: #ffffff;
   background: var(--btn);
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.05s ease;
+  transition:
+    background 0.15s ease,
+    transform 0.05s ease;
 }
 
 .btn:hover {
@@ -266,7 +283,10 @@ body {
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .arena-btn:hover {
@@ -312,8 +332,12 @@ body {
   line-height: 1;
 }
 
-.mini-cell.x { color: var(--x-color); }
-.mini-cell.o { color: var(--o-color); }
+.mini-cell.x {
+  color: var(--x-color);
+}
+.mini-cell.o {
+  color: var(--o-color);
+}
 
 /* Make the mode buttons feel a bit more important than plain app buttons. */
 #start-screen .button-group .btn {
@@ -337,7 +361,7 @@ body {
 .score-item {
   flex: 1;
   max-width: 110px;
-  background: var(--cell-bg);   /* same tint as the cells */
+  background: var(--cell-bg); /* same tint as the cells */
   border-radius: 12px;
   padding: 0.5rem 0.4rem;
   display: flex;
@@ -360,8 +384,12 @@ body {
 }
 
 /* Tint the X and O scores to match their marks on the board. */
-#score-x { color: var(--x-color); }
-#score-o { color: var(--o-color); }
+#score-x {
+  color: var(--x-color);
+}
+#score-o {
+  color: var(--o-color);
+}
 
 /* --- The game board --- */
 
@@ -386,13 +414,13 @@ body {
   appearance: none;
   -webkit-appearance: none;
   width: 100%;
-  height: 100%;           /* fill its grid track so the cell stays square */
+  height: 100%; /* fill its grid track so the cell stays square */
   margin: 0;
   padding: 0;
-  border: 2px solid var(--cell-border);   /* clear border around each cell */
+  border: 2px solid var(--cell-border); /* clear border around each cell */
   border-radius: 12px;
   background: var(--cell-bg);
-  box-shadow: var(--cell-glow);            /* glow only in the Neon theme */
+  box-shadow: var(--cell-glow); /* glow only in the Neon theme */
   font-size: 3.4rem;
   font-weight: 700;
   line-height: 1;
@@ -431,9 +459,18 @@ body {
 }
 
 @keyframes pop-in {
-  0%   { transform: scale(0.4); opacity: 0; }
-  70%  { transform: scale(1.08); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* The three cells of a winning line get highlighted and gently glow.
@@ -449,8 +486,13 @@ body {
 }
 
 @keyframes win-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--win-bg); }
-  50%      { box-shadow: 0 0 16px 3px var(--win-bg); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--win-bg);
+  }
+  50% {
+    box-shadow: 0 0 16px 3px var(--win-bg);
+  }
 }
 
 /* The small note that explains the computer's last move. Subtle so it does
