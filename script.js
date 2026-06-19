@@ -68,6 +68,10 @@ const statusText = document.getElementById("status");
 const boardTitle = document.getElementById("board-title");
 const restartButton = document.getElementById("restart");
 const resetScoreButton = document.getElementById("reset-score");
+const explanationEl = document.getElementById("ai-explanation");
+
+// Holds the most recent "why the computer moved" text, set by the AI choosers.
+let aiExplanation = "";
 
 // Scoreboard pieces: the two labels that change per mode, and the three values.
 const scoreLabelX = document.getElementById("score-label-x");
@@ -270,33 +274,39 @@ function chooseEasyMove() {
 // beatable and less predictable than a perfect player.
 const MEDIUM_SMART_CHANCE = 0.65;
 
-// The "smart" part of Medium: a simple priority order.
+// The "smart" part of Medium: a simple priority order. Each branch also records
+// a short explanation of what it did (this does not change which move is made).
 function chooseMediumSmartMove() {
   // 1. Take an immediate win if there is one (computer is O).
   let move = findCompletingMove("O");
   if (move !== null) {
+    aiExplanation = "Medium AI found a winning move.";
     return move;
   }
 
   // 2. Otherwise block the human (X) if they are about to win.
   move = findCompletingMove("X");
   if (move !== null) {
+    aiExplanation = "Medium AI blocked your threat.";
     return move;
   }
 
   // 3. Take the center if it is open.
   if (board[4] === "") {
+    aiExplanation = "Medium AI took the center.";
     return 4;
   }
 
   // 4. Take a random open corner.
   const openCorners = [0, 2, 6, 8].filter((i) => board[i] === "");
   if (openCorners.length > 0) {
+    aiExplanation = "Medium AI chose a corner.";
     return randomFrom(openCorners);
   }
 
   // 5. Fall back to any random empty square.
   const empties = emptyIndexes();
+  aiExplanation = "Medium AI made a random move.";
   return empties.length > 0 ? randomFrom(empties) : null;
 }
 
@@ -305,8 +315,9 @@ function chooseMediumSmartMove() {
 //   - ~35% of turns: ignore strategy and just pick a random empty square.
 function chooseMediumMove() {
   if (Math.random() < MEDIUM_SMART_CHANCE) {
-    return chooseMediumSmartMove();
+    return chooseMediumSmartMove(); // sets its own explanation per branch
   }
+  aiExplanation = "Medium AI made a random move.";
   return chooseEasyMove(); // a plain random empty square
 }
 
@@ -395,13 +406,16 @@ function chooseImpossibleMove() {
 }
 
 // Pick the computer's move based on the current difficulty.
+// Each branch also records an explanation (Medium sets its own, per-branch).
 function chooseComputerMove() {
   if (gameMode === "medium") {
     return chooseMediumMove();
   }
   if (gameMode === "impossible") {
+    aiExplanation = "Impossible AI used Minimax to search future outcomes and pick the best move.";
     return chooseImpossibleMove();
   }
+  aiExplanation = "Easy AI picked a random open square.";
   return chooseEasyMove(); // easy (and any other computer mode for now)
 }
 
@@ -420,6 +434,10 @@ function computerMove() {
   }
 
   placeMark(choice, "O");
+
+  // Show what the AI just did (set by chooseComputerMove). Done before the
+  // game-over check so it still appears on a game-ending computer move.
+  explanationEl.textContent = aiExplanation;
 
   // The computer's turn is done, so unlock the board for the human.
   lockBoard = false;
@@ -478,6 +496,10 @@ function resetGame() {
   currentPlayer = "X";
   gameOver = false;
   lockBoard = false;
+
+  // Clear the AI explanation at the start of each round.
+  aiExplanation = "";
+  explanationEl.textContent = "";
 
   // Title and status both depend on the current mode.
   if (gameMode === "easy") {

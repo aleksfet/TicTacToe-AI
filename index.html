@@ -17,7 +17,7 @@
     <title>Tic Tac Toe AI Arena</title>
     <!-- The "?v=" forces the browser to reload the latest CSS instead of
          showing an old cached copy. Bump the number after future edits. -->
-    <link rel="stylesheet" href="styles.css?v=6" />
+    <link rel="stylesheet" href="styles.css?v=7" />
   </head>
   <body>
     <!-- The card sits in the middle of the page and holds every screen. -->
@@ -75,6 +75,10 @@
           <button class="cell" data-index="8"></button>
         </div>
 
+        <!-- Short note explaining the computer's last move (computer modes
+             only). It stays empty in Play vs Player. -->
+        <p id="ai-explanation"></p>
+
         <div class="button-group">
           <!-- id="restart" and id="reset-score" are handled separately in
                script.js (not screen switches), so they have no data-target. -->
@@ -118,6 +122,6 @@
 
     <!-- "defer" makes the script run after the page has loaded.
          The "?v=" works like the CSS one: it forces a fresh copy. -->
-    <script src="script.js?v=8" defer></script>
+    <script src="script.js?v=9" defer></script>
   </body>
 </html>
