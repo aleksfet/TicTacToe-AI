@@ -95,6 +95,7 @@ setTheme("classic");
 const cells = document.querySelectorAll(".cell");
 const statusText = document.getElementById("status");
 const boardTitle = document.getElementById("board-title");
+const difficultyBadge = document.getElementById("difficulty-badge");
 const restartButton = document.getElementById("restart");
 const resetScoreButton = document.getElementById("reset-score");
 const explanationEl = document.getElementById("ai-explanation");
@@ -163,7 +164,8 @@ function findWinningLine() {
 function placeMark(index, player) {
   board[index] = player;
   const cell = cells[index];
-  cell.textContent = player;
+  // Wrap the mark in a span so it can pop in (see the .mark CSS animation).
+  cell.innerHTML = '<span class="mark">' + player + "</span>";
   cell.classList.add("taken");
   cell.classList.add(player === "X" ? "x" : "o");
 }
@@ -530,15 +532,23 @@ function resetGame() {
   aiExplanation = "";
   explanationEl.textContent = "";
 
-  // Title and status both depend on the current mode.
+  // Match header + difficulty badge both depend on the current mode.
   if (gameMode === "easy") {
-    boardTitle.textContent = "Play vs Computer (Easy)";
+    boardTitle.textContent = "You vs Easy AI";
   } else if (gameMode === "medium") {
-    boardTitle.textContent = "Play vs Computer (Medium)";
+    boardTitle.textContent = "You vs Medium AI";
   } else if (gameMode === "impossible") {
-    boardTitle.textContent = "Play vs Computer (Impossible)";
+    boardTitle.textContent = "You vs Impossible AI";
   } else {
-    boardTitle.textContent = "Play vs Player";
+    boardTitle.textContent = "Player vs Player";
+  }
+
+  // Show the difficulty badge (Easy / Medium / Impossible) in computer modes.
+  if (isComputerMode()) {
+    difficultyBadge.textContent = gameMode.charAt(0).toUpperCase() + gameMode.slice(1);
+    difficultyBadge.classList.remove("hidden");
+  } else {
+    difficultyBadge.classList.add("hidden");
   }
 
   // Keep the scoreboard labels/values in step with the mode. (Restart calls

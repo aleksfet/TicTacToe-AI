@@ -147,6 +147,25 @@ body {
 #status.result-o { color: var(--o-color); }
 #status.result-draw { color: var(--draw-color); }
 
+/* Small difficulty badge under the match header (computer modes only). */
+.badge {
+  display: inline-block;
+  margin: 0.1rem 0 0.25rem;
+  padding: 0.2rem 0.75rem;
+  border-radius: 999px;
+  background: var(--btn);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Needs higher specificity than .badge to win against the base display. */
+.badge.hidden {
+  display: none;
+}
+
 /* Stack the buttons in a vertical column with even spacing. */
 .button-group {
   display: flex;
@@ -260,6 +279,53 @@ body {
   color: var(--btn);
 }
 
+/* --- Start screen polish --- */
+
+/* A stronger, more game-like main title. */
+#start-screen .title {
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+}
+
+/* Decorative mini board shown under the subtitle. Colors follow the theme. */
+.mini-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 4px;
+  width: 100px;
+  height: 100px;
+  margin: 1.25rem auto 0.25rem;
+}
+
+.mini-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cell-bg);
+  border: 1px solid var(--cell-border);
+  border-radius: 6px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mini-cell.x { color: var(--x-color); }
+.mini-cell.o { color: var(--o-color); }
+
+/* Make the mode buttons feel a bit more important than plain app buttons. */
+#start-screen .button-group .btn {
+  padding: 1rem;
+  font-size: 1.15rem;
+  box-shadow: 0 4px 12px var(--card-shadow);
+}
+
+#start-screen .button-group .btn:hover {
+  transform: translateY(-1px);
+}
+
 /* --- The scoreboard (three little stat boxes above the board) --- */
 .scoreboard {
   display: flex;
@@ -338,17 +404,15 @@ body {
   transition: background 0.15s ease;
 }
 
-.cell:hover {
+/* Only EMPTY cells highlight on hover (filled cells stay put). */
+.cell:not(.taken):hover {
   background: var(--cell-hover);
+  border-color: var(--btn);
 }
 
 /* Once a cell is filled it should not look clickable any more. */
 .cell.taken {
   cursor: default;
-}
-
-.cell.taken:hover {
-  background: var(--cell-bg);
 }
 
 /* Give X and O their own colors so the board is easy to read. */
@@ -360,13 +424,33 @@ body {
   color: var(--o-color);
 }
 
-/* The three cells of a winning line get highlighted. */
+/* The mark (X or O) pops in gently when it is placed. */
+.mark {
+  display: inline-block;
+  animation: pop-in 0.18s ease-out;
+}
+
+@keyframes pop-in {
+  0%   { transform: scale(0.4); opacity: 0; }
+  70%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* The three cells of a winning line get highlighted and gently glow.
+   The glow color is the theme's win color, so it works in every arena. */
 .cell.win {
+  background: var(--win-bg);
+  animation: win-pulse 1s ease-in-out infinite;
+}
+
+.cell.win:not(.taken):hover,
+.cell.win:hover {
   background: var(--win-bg);
 }
 
-.cell.win:hover {
-  background: var(--win-bg);
+@keyframes win-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--win-bg); }
+  50%      { box-shadow: 0 0 16px 3px var(--win-bg); }
 }
 
 /* The small note that explains the computer's last move. Subtle so it does
@@ -387,6 +471,9 @@ body {
   }
   .title {
     font-size: 1.6rem;
+  }
+  #start-screen .title {
+    font-size: 2rem;
   }
   .cell {
     font-size: 2.6rem;
