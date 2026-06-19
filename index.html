@@ -17,7 +17,7 @@
     <title>Tic Tac Toe AI Arena</title>
     <!-- The "?v=" forces the browser to reload the latest CSS instead of
          showing an old cached copy. Bump the number after future edits. -->
-    <link rel="stylesheet" href="styles.css?v=5" />
+    <link rel="stylesheet" href="styles.css?v=6" />
   </head>
   <body>
     <!-- The card sits in the middle of the page and holds every screen. -->
@@ -44,6 +44,23 @@
         <!-- Status line: whose turn it is, or the result. -->
         <p id="status" class="subtitle">Player X's turn</p>
 
+        <!-- Scoreboard. The X / O labels become "You" / "Computer" in computer
+             modes (script.js sets the label text). Values count session wins. -->
+        <div class="scoreboard">
+          <div class="score-item">
+            <span class="score-label" id="score-label-x">X</span>
+            <span class="score-value" id="score-x">0</span>
+          </div>
+          <div class="score-item">
+            <span class="score-label" id="score-label-o">O</span>
+            <span class="score-value" id="score-o">0</span>
+          </div>
+          <div class="score-item">
+            <span class="score-label">Draws</span>
+            <span class="score-value" id="score-draws">0</span>
+          </div>
+        </div>
+
         <!-- The 3x3 board. Each cell is a button so it is easy to click
              and works with the keyboard too. data-index is 0..8. -->
         <div id="board" class="board">
@@ -59,9 +76,10 @@
         </div>
 
         <div class="button-group">
-          <!-- id="restart" is handled separately in script.js (not a screen
-               switch), so it has no data-target. -->
-          <button id="restart" class="btn">Restart</button>
+          <!-- id="restart" and id="reset-score" are handled separately in
+               script.js (not screen switches), so they have no data-target. -->
+          <button id="restart" class="btn">Restart Game</button>
+          <button id="reset-score" class="btn btn-secondary">Reset Score</button>
           <button class="btn btn-secondary" data-target="start-screen">Back to Menu</button>
         </div>
       </section>
@@ -100,6 +118,6 @@
 
     <!-- "defer" makes the script run after the page has loaded.
          The "?v=" works like the CSS one: it forces a fresh copy. -->
-    <script src="script.js?v=6" defer></script>
+    <script src="script.js?v=8" defer></script>
   </body>
 </html>

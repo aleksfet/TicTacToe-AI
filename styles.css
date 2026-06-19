@@ -158,6 +158,43 @@ body {
   color: var(--muted);
 }
 
+/* --- The scoreboard (three little stat boxes above the board) --- */
+.scoreboard {
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 0.75rem auto 0;
+}
+
+.score-item {
+  flex: 1;
+  max-width: 110px;
+  background: #eef1f7;          /* same light tint as the cells */
+  border-radius: 12px;
+  padding: 0.5rem 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.score-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.score-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Tint the X and O scores to match their marks on the board. */
+#score-x { color: var(--btn); }   /* blue, like X */
+#score-o { color: #e0567a; }      /* pink, like O */
+
 /* --- The game board --- */
 
 /* A 3x3 square board, about 360px on desktop. "width: min(360px, 100%)" keeps
