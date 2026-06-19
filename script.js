@@ -59,6 +59,35 @@ navButtons.forEach((button) => {
 });
 
 // ---------------------------------------------------------------------------
+// Arena (theme) selection
+//
+//   - Each theme is a CSS class on <body> ("theme-classic", "theme-neon",
+//     "theme-sunset") that overrides the color variables.
+//   - The chosen theme is just a body class, so it stays put no matter which
+//     screen is shown (switching screens never touches the body class).
+// ---------------------------------------------------------------------------
+
+const themeButtons = document.querySelectorAll("[data-theme]");
+const THEME_CLASSES = ["theme-classic", "theme-ocean", "theme-neon"];
+
+function setTheme(theme) {
+  // Swap the theme class on the body...
+  document.body.classList.remove(...THEME_CLASSES);
+  document.body.classList.add("theme-" + theme);
+  // ...and highlight the matching arena button.
+  themeButtons.forEach((button) => {
+    button.classList.toggle("active", button.getAttribute("data-theme") === theme);
+  });
+}
+
+themeButtons.forEach((button) => {
+  button.addEventListener("click", () => setTheme(button.getAttribute("data-theme")));
+});
+
+// Start on the Classic arena.
+setTheme("classic");
+
+// ---------------------------------------------------------------------------
 // The game
 // ---------------------------------------------------------------------------
 
