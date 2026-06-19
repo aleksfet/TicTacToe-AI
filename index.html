@@ -17,7 +17,7 @@
     <title>Tic Tac Toe AI Arena</title>
     <!-- The "?v=" forces the browser to reload the latest CSS instead of
          showing an old cached copy. Bump the number after future edits. -->
-    <link rel="stylesheet" href="styles.css?v=9" />
+    <link rel="stylesheet" href="styles.css?v=11" />
   </head>
   <body>
     <!-- The card sits in the middle of the page and holds every screen. -->
@@ -26,6 +26,21 @@
       <section id="start-screen" class="screen">
         <h1 class="title">Tic Tac Toe AI Arena</h1>
         <p class="subtitle">Choose a mode: play with someone or challenge the computer.</p>
+
+        <!-- Decorative mini board (not clickable). It uses mini-* classes on
+             purpose so the game's JS, which grabs every ".cell", ignores it.
+             aria-hidden hides it from screen readers since it is just art. -->
+        <div class="mini-board" aria-hidden="true">
+          <div class="mini-cell x">X</div>
+          <div class="mini-cell"></div>
+          <div class="mini-cell o">O</div>
+          <div class="mini-cell"></div>
+          <div class="mini-cell x">X</div>
+          <div class="mini-cell"></div>
+          <div class="mini-cell o">O</div>
+          <div class="mini-cell"></div>
+          <div class="mini-cell x">X</div>
+        </div>
 
         <div class="button-group">
           <!-- data-target tells script.js which screen to show on click.
@@ -49,8 +64,10 @@
 
       <!-- ===== Game board (used by both Play vs Player and Easy mode) ===== -->
       <section id="player-screen" class="screen hidden">
-        <!-- The title changes depending on the mode (set by script.js). -->
-        <h2 id="board-title" class="title">Play vs Player</h2>
+        <!-- The match header changes depending on the mode (set by script.js).
+             The badge below it only appears in computer modes. -->
+        <h2 id="board-title" class="title">Player vs Player</h2>
+        <span id="difficulty-badge" class="badge hidden"></span>
 
         <!-- Status line: whose turn it is, or the result. -->
         <p id="status" class="subtitle">Player X's turn</p>
@@ -133,6 +150,6 @@
 
     <!-- "defer" makes the script run after the page has loaded.
          The "?v=" works like the CSS one: it forces a fresh copy. -->
-    <script src="script.js?v=11" defer></script>
+    <script src="script.js?v=12" defer></script>
   </body>
 </html>
