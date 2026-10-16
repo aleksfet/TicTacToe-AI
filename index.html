@@ -22,7 +22,7 @@
     <title>Tic Tac Toe AI Arena</title>
     <!-- The "?v=" forces the browser to reload the latest CSS instead of
          showing an old cached copy. Bump the number after future edits. -->
-    <link rel="stylesheet" href="styles.css?v=14" />
+    <link rel="stylesheet" href="styles.css?v=16" />
   </head>
   <body>
     <!-- The card sits in the middle of the page and holds every screen. -->
@@ -111,19 +111,35 @@
           <button class="cell" data-index="8"></button>
         </div>
 
-        <!-- Short note explaining the computer's last move (computer modes
-             only). It stays empty in Play vs Player. -->
+        <!-- Short note under the board: the computer's last move (computer
+             modes), or match news in online play. Empty in Same Device. -->
         <p id="ai-explanation"></p>
 
         <!-- Restart is the main action; Reset Score and Back to Menu sit
              side by side underneath it.
              id="restart" and id="reset-score" are handled separately in
              script.js (not screen switches), so they have no data-target. -->
-        <div class="game-controls">
+        <div id="local-controls" class="game-controls">
           <button id="restart" class="btn">Restart Game</button>
           <div class="secondary-actions">
             <button id="reset-score" class="btn btn-secondary">Reset Score</button>
             <button class="btn btn-secondary" data-target="start-screen">Back to Menu</button>
+          </div>
+        </div>
+
+        <!-- Online match controls (src/online-ui.js). There is no Restart or
+             Reset Score online: the room's scores belong to the server. -->
+        <div id="online-controls" class="game-controls" hidden>
+          <!-- Rematch / Accept Rematch, shown after a result. -->
+          <button id="online-rematch" class="btn" hidden>Rematch</button>
+          <button id="online-leave" class="btn btn-secondary">Leave Match</button>
+          <!-- Leaving closes the room for the friend too, so ask first. -->
+          <div id="online-leave-confirm" class="leave-confirm" hidden>
+            <p id="online-leave-text" class="leave-confirm-text">Leave this match? Your friend will be disconnected.</p>
+            <div class="secondary-actions">
+              <button id="online-leave-yes" class="btn">Leave</button>
+              <button id="online-leave-no" class="btn btn-secondary">Stay</button>
+            </div>
           </div>
         </div>
       </section>
@@ -238,6 +254,8 @@
         <p id="lobby-note" class="lobby-note"></p>
 
         <div class="lobby-controls">
+          <!-- Shown once both players are in: opens the online board. -->
+          <button id="lobby-start" class="btn" hidden>Start Match</button>
           <button id="lobby-leave" class="btn btn-secondary">Cancel</button>
           <!-- Leaving a match with two players closes it for both, so ask first. -->
           <div id="leave-confirm" class="leave-confirm" hidden>
@@ -296,9 +314,9 @@
     <script src="src/game.js?v=1" defer></script>
     <script src="src/ai.js?v=1" defer></script>
     <script src="src/online-config.js?v=1" defer></script>
-    <script src="src/online.js?v=2" defer></script>
+    <script src="src/online.js?v=3" defer></script>
     <script src="src/online-client.js?v=1" defer></script>
-    <script src="script.js?v=15" defer></script>
-    <script src="src/online-ui.js?v=1" defer></script>
+    <script src="script.js?v=17" defer></script>
+    <script src="src/online-ui.js?v=2" defer></script>
   </body>
 </html>

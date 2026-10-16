@@ -16,8 +16,12 @@
 //     ignores updates older than the one already shown (row versions).
 //   - There are no accounts: the player's identity is created silently.
 //
-// Online board play (moves, scoreboard, rematch) comes in a later phase; for
-// now the lobby ends at "Match ready".
+// Once both players are in, "Start Match" opens the normal game screen in
+// online mode (script.js draws it). Every change to the room - our own move
+// (the server's reply), the opponent's move (a live update), or a re-read -
+// goes through applyRow(), which ignores anything not newer than what is
+// already shown. So a move is drawn and announced exactly once, and only
+// after the server has accepted it.
 
 (() => {
   const Online = TicTacToeOnline;
@@ -46,6 +50,15 @@
   const leaveConfirm = document.getElementById("leave-confirm");
   const leaveYes = document.getElementById("leave-yes");
   const leaveNo = document.getElementById("leave-no");
+  const startButton = document.getElementById("lobby-start");
+
+  // The online parts of the game screen.
+  const playerScreen = document.getElementById("player-screen");
+  const rematchButton = document.getElementById("online-rematch");
+  const boardLeave = document.getElementById("online-leave");
+  const boardLeaveConfirm = document.getElementById("online-leave-confirm");
+  const boardLeaveYes = document.getElementById("online-leave-yes");
+  const boardLeaveNo = document.getElementById("online-leave-no");
 
   const COPY_LABEL = "Copy Invite Link";
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
@@ -68,6 +81,14 @@
 
   let lastPhase = null;
   let copyTimer = null;
+
+  // True while our own move (or rematch request) is on its way to the
+  // server; the board stays locked until the server answers.
+  let movePending = false;
+
+  // A short message under the online board (e.g. "That move is no longer
+  // available."). Cleared by the next newer version of the room.
+  let boardNotice = "";
 
   // --- Small helpers ------------------------------------------------------------
 
@@ -115,7 +136,8 @@
 
   // --- The lobby screen ---------------------------------------------------------
 
-  function renderLobby() {
+  // quiet: don't announce (the online board is showing and announces itself).
+  function renderLobby({ quiet = false } = {}) {
     const state = room && room.row ? Online.deriveOnlineState(room.row, room.userId) : null;
     const view = Online.getLobbyView(state);
     const code = (room && room.row && room.row.room_code) || joiningCode || "";
@@ -143,9 +165,14 @@
       leaveButton.hidden = false;
     }
 
+    startButton.hidden = !view.startLabel || !leaveConfirm.hidden;
+    startButton.textContent = view.startLabel || "Start Match";
+
     // Tell screen readers when the situation changes (once per change).
     if (view.phase !== lastPhase) {
-      if (view.phase === "waiting") {
+      if (quiet) {
+        // nothing: the board announces its own changes
+      } else if (view.phase === "waiting") {
         announce(`Game created. ${lobbyCodeSpoken.textContent}. Waiting for opponent.`);
       } else if (view.phase === "ready") {
         announce(`Match ready. ${view.note}`);
@@ -158,8 +185,14 @@
     }
   }
 
-  // Show a newer version of the room (from our own request, a live update,
-  // or a re-check). Older or duplicate versions are ignored.
+  function onlineBoardVisible() {
+    return gameMode === "online" && !playerScreen.classList.contains("hidden");
+  }
+
+  // THE one way the screen learns about the room. Called with the server's
+  // reply to our own request, with live updates, and with re-reads. Older
+  // or duplicate versions are ignored, so the same change is never drawn or
+  // announced twice (e.g. our move arrives as a reply AND as a live update).
   function applyRow(row) {
     if (!room || !row || (room.row && row.id !== room.row.id)) {
       return;
@@ -168,13 +201,38 @@
     if (!Online.shouldAcceptVersion(current, row.version)) {
       return;
     }
+    const before = room.row ? Online.deriveOnlineState(room.row, room.userId) : null;
     room.row = row;
-    renderLobby();
+    boardNotice = "";
+    const onBoard = onlineBoardVisible();
+    renderLobby({ quiet: onBoard });
+    if (onBoard) {
+      renderOnlineBoard();
+      const message = Online.describeOnlineChange(before, Online.deriveOnlineState(row, room.userId));
+      if (message) {
+        announce(message);
+      }
+    }
   }
 
-  // Listen for changes to this room (e.g. the guest arriving). Once the
-  // subscription is live, read the room again: the guest may have joined in
-  // the moment between creating the room and subscribing.
+  // Read the room from the server again and show it if it is newer. Used
+  // when the live connection (re)starts, when the tab becomes visible again,
+  // and after a move the server refused - anything we might have missed.
+  async function refreshRoom() {
+    const thisRoom = room;
+    if (!thisRoom || !thisRoom.row) {
+      return;
+    }
+    const { data } = await thisRoom.client.from("online_games").select("*").eq("id", thisRoom.row.id).maybeSingle();
+    if (data && room === thisRoom) {
+      applyRow(data);
+    }
+  }
+
+  // Listen for changes to this room (the guest arriving, moves, rematches).
+  // Every time the subscription becomes live - the first time and after any
+  // reconnect - read the room again: something may have changed meanwhile
+  // (e.g. the guest joined between creating the room and subscribing).
   async function subscribe(session) {
     const thisRoom = room;
     const id = thisRoom.row.id;
@@ -193,17 +251,185 @@
           applyRow(payload.new);
         }
       })
-      .subscribe(async (status) => {
-        if (status !== "SUBSCRIBED" || room !== thisRoom) {
-          return;
-        }
-        const { data } = await thisRoom.client.from("online_games").select("*").eq("id", id).maybeSingle();
-        if (data && room === thisRoom) {
-          applyRow(data);
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED" && room === thisRoom) {
+          refreshRoom();
         }
       });
     thisRoom.channel = channel;
   }
+
+  // --- The online board ---------------------------------------------------------
+
+  // Draw the game screen from the room: board, turn/result, scores, buttons.
+  function renderOnlineBoard() {
+    if (!room || !room.row) {
+      return;
+    }
+    const state = Online.deriveOnlineState(room.row, room.userId);
+    const view = Online.getOnlineBoardView(state, { pending: movePending });
+
+    setBoardHeader(view.title, view.badge);
+    setStatusLine(view.status, view.resultMark);
+    // Scores are per person (marks swap on every rematch), straight from the
+    // server's counts - never counted here.
+    setScoreboard("You", "Opponent", view.scores.you, view.scores.opponent, view.scores.draws);
+    renderBoard(state ? state.board : TicTacToeGame.createEmptyBoard(), {
+      winningLine: state ? state.winningLine : null,
+      locked: !view.interactive,
+    });
+    setBoardNote(boardNotice || view.note);
+
+    const confirming = !boardLeaveConfirm.hidden;
+    rematchButton.hidden = !view.primary || confirming;
+    if (view.primary) {
+      rematchButton.textContent = view.primary.label;
+      rematchButton.disabled = view.primary.disabled || movePending;
+    }
+    boardLeave.textContent = view.leave.label;
+    boardLeave.dataset.confirm = view.leave.confirm ? "yes" : "no";
+    if (!view.leave.confirm && confirming) {
+      // The room closed while we were asking: nothing left to confirm.
+      boardLeaveConfirm.hidden = true;
+      boardLeave.hidden = false;
+    }
+  }
+
+  // "Start Match" / "Resume Match": open the board for this room.
+  function startMatch() {
+    if (!room || !room.row) {
+      return;
+    }
+    boardNotice = "";
+    boardLeaveConfirm.hidden = true;
+    boardLeave.hidden = false;
+    enterOnlineBoard(onSquare);
+    renderOnlineBoard();
+    const view = Online.getOnlineBoardView(Online.deriveOnlineState(room.row, room.userId));
+    announce(`Online match. ${view.badge ? view.badge + ". " : ""}${view.status}`);
+  }
+
+  // The player picked a square. The server decides; we only draw its answer.
+  async function onSquare(index) {
+    if (!room || !room.row || movePending) {
+      return;
+    }
+    const state = Online.deriveOnlineState(room.row, room.userId);
+    if (!Online.getOnlineBoardView(state).interactive || state.board[index] !== "") {
+      return; // not our turn / square taken: nothing to send
+    }
+    const thisRoom = room;
+    movePending = true;
+    renderOnlineBoard(); // locks the board while the move is on its way
+    let notice = "";
+    try {
+      const { data, error } = await thisRoom.client.rpc("make_move", { game_id: thisRoom.row.id, cell: index });
+      if (error) {
+        throw error;
+      }
+      movePending = false;
+      if (room === thisRoom) {
+        applyRow(data);
+      }
+    } catch (error) {
+      movePending = false;
+      if (room !== thisRoom) {
+        return;
+      }
+      const friendly = Online.friendlyErrorMessage(error);
+      const raw = Online.normalizeBackendError(error);
+      if (raw && (raw.code === "NOT_YOUR_TURN" || raw.code === "CELL_TAKEN")) {
+        notice = "That move is no longer available.";
+      } else if (friendly.code === "UNAVAILABLE") {
+        notice = "Your move wasn't sent. Check your connection and try again.";
+      } else if (!raw || !raw.known) {
+        notice = friendly.message;
+      }
+      // GAME_OVER / ROOM_CLOSED / NOT_A_PLAYER: the re-read shows why.
+      await refreshRoom();
+    } finally {
+      movePending = false;
+    }
+    if (room === thisRoom) {
+      boardNotice = notice;
+      renderOnlineBoard();
+      if (notice) {
+        announce(notice);
+      }
+    }
+  }
+
+  // Rematch / Accept Rematch.
+  rematchButton.addEventListener("click", async () => {
+    if (!room || !room.row || movePending) {
+      return;
+    }
+    const thisRoom = room;
+    movePending = true;
+    rematchButton.disabled = true;
+    let notice = "";
+    try {
+      const { data, error } = await thisRoom.client.rpc("request_rematch", { game_id: thisRoom.row.id });
+      if (error) {
+        throw error;
+      }
+      movePending = false;
+      if (room === thisRoom) {
+        applyRow(data);
+      }
+    } catch (error) {
+      movePending = false;
+      if (room !== thisRoom) {
+        return;
+      }
+      notice = Online.friendlyErrorMessage(error).code === "UNAVAILABLE"
+        ? "Couldn't reach the game. Check your connection and try again."
+        : "";
+      await refreshRoom();
+    } finally {
+      movePending = false;
+    }
+    if (room === thisRoom) {
+      boardNotice = notice;
+      renderOnlineBoard();
+      if (notice) {
+        announce(notice);
+      }
+    }
+  });
+
+  // Leave Match (asks first: it closes the room for the friend too), or Back
+  // once the room is already closed.
+  boardLeave.addEventListener("click", () => {
+    if (boardLeave.dataset.confirm === "yes") {
+      boardLeave.hidden = true;
+      rematchButton.hidden = true;
+      boardLeaveConfirm.hidden = false;
+      boardLeaveNo.focus();
+      announce(document.getElementById("online-leave-text").textContent);
+      return;
+    }
+    exitLobby({ closeRoom: false });
+  });
+
+  boardLeaveYes.addEventListener("click", () => exitLobby({ closeRoom: true }));
+
+  boardLeaveNo.addEventListener("click", () => {
+    boardLeaveConfirm.hidden = true;
+    boardLeave.hidden = false;
+    renderOnlineBoard();
+    boardLeave.focus();
+  });
+
+  startButton.addEventListener("click", startMatch);
+
+  // A phone waking up or a tab coming back may have missed live updates:
+  // read the room again.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && room && room.row) {
+      refreshRoom();
+    }
+  });
 
   // We have a room row from create_game or join_game: show the lobby.
   function enterRoom(connection, row) {
@@ -225,26 +451,28 @@
     joiningCode = null;
     visit++;
     lastPhase = null;
+    movePending = false;
+    boardNotice = "";
     clearTimeout(copyTimer);
     copyButton.textContent = COPY_LABEL;
     setAddressRoom(null);
 
     if (leaving && closeRoom && leaving.row) {
-      leaveButton.disabled = true;
-      leaveYes.disabled = true;
+      [leaveButton, leaveYes, boardLeave, boardLeaveYes].forEach((b) => (b.disabled = true));
       try {
         await leaving.client.rpc("leave_game", { game_id: leaving.row.id });
       } catch (error) {
         // If this fails the room simply expires after an hour of inactivity.
       }
-      leaveButton.disabled = false;
-      leaveYes.disabled = false;
+      [leaveButton, leaveYes, boardLeave, boardLeaveYes].forEach((b) => (b.disabled = false));
     }
     if (leaving && leaving.channel) {
       leaving.client.removeChannel(leaving.channel);
     }
     leaveConfirm.hidden = true;
     leaveButton.hidden = false;
+    boardLeaveConfirm.hidden = true;
+    boardLeave.hidden = false;
     setOnlineMessage("");
     showScreen("online-screen");
   }
@@ -431,6 +659,7 @@
     if (leaveButton.dataset.confirm === "yes") {
       // Two players are in the room: leaving closes it for the friend too.
       leaveButton.hidden = true;
+      startButton.hidden = true;
       leaveConfirm.hidden = false;
       leaveNo.focus();
       announce(document.getElementById("leave-confirm-text").textContent);
@@ -446,6 +675,7 @@
   leaveNo.addEventListener("click", () => {
     leaveConfirm.hidden = true;
     leaveButton.hidden = false;
+    renderLobby({ quiet: true }); // brings Start Match back
     leaveButton.focus();
   });
 

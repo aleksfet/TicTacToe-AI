@@ -396,10 +396,120 @@ const TicTacToeOnline = ((Game) => {
     // Both players are in the room ("playing" or "finished").
     const who = state.amHost ? "Your friend joined." : "You joined your friend's game.";
     const first = state.myMark === "X" ? `You are X and go first.` : `You are O. Your friend goes first.`;
+    // A game already under way (e.g. after a refresh) is resumed, not started.
+    const underway = state.board.some((v) => v !== "") || state.status === "finished" || state.rematch !== null;
     return {
       phase: "ready", status: "Match ready", note: `${who} ${first}`, badge,
       showCode: true, showInvite: false, leaveLabel: "Leave Match", confirmLeave: true,
+      startLabel: underway ? "Resume Match" : "Start Match",
     };
+  }
+
+  // --- The online board -----------------------------------------------------------
+
+  // "Row 2, column 3" for square 5 (same wording as the local board).
+  function squareName(index) {
+    return `Row ${Math.floor(index / 3) + 1}, column ${(index % 3) + 1}`;
+  }
+
+  // The online status line for a state (no trailing full stop on turns, like
+  // the local game's "Your turn").
+  function onlineStatusText(state) {
+    if (!state || state.status === "closed" || !state.amPlayer) {
+      return "Match closed.";
+    }
+    if (state.status === "finished") {
+      if (state.result === "win") return "You win!";
+      if (state.result === "loss") return "Opponent wins.";
+      return "It's a draw!";
+    }
+    if (state.status === "waiting") {
+      return "Waiting for opponent…";
+    }
+    return state.isMyTurn ? "Your turn" : "Opponent's turn";
+  }
+
+  // Everything the game screen shows during an online match, from one
+  // player's side. options.pending = our own move is on its way to the server
+  // (the board stays locked until the server answers).
+  //   interactive  may this player pick a square right now?
+  //   resultMark   "x" / "o" / "draw" to colour the result line, or null
+  //   primary      the main button: { label, disabled } or null
+  //   leave        { label, confirm }: confirm = ask first (closes the room)
+  // Scores are per person (You / Opponent), never per mark: marks swap.
+  function getOnlineBoardView(state, { pending = false } = {}) {
+    const closed = !state || state.status === "closed" || !state.amPlayer;
+    const view = {
+      title: "Online Match",
+      badge: state && state.myMark && !closed ? `You are ${state.myMark}` : null,
+      status: onlineStatusText(state),
+      resultMark: null,
+      interactive: false,
+      note: "",
+      scores: {
+        you: state && state.amPlayer ? state.myWins : 0,
+        draws: state && state.amPlayer ? state.draws : 0,
+        opponent: state && state.amPlayer ? state.opponentWins : 0,
+      },
+      primary: null,
+      leave: closed ? { label: "Back", confirm: false } : { label: "Leave Match", confirm: true },
+    };
+    if (closed) {
+      if (state && state.leftBy === "opponent") view.note = "Your friend left the game.";
+      else if (state && state.leftBy === "me") view.note = "You left this game.";
+      return view;
+    }
+    if (state.status === "playing") {
+      view.interactive = state.isMyTurn && !pending;
+    }
+    if (state.status === "finished") {
+      view.resultMark = state.winner ? state.winner.toLowerCase() : "draw";
+      if (state.rematch === "me") {
+        view.primary = { label: "Waiting for opponent…", disabled: true };
+        view.note = "Rematch requested. Waiting for your friend.";
+      } else if (state.rematch === "opponent") {
+        view.primary = { label: "Accept Rematch", disabled: false };
+        view.note = "Opponent wants a rematch.";
+      } else {
+        view.primary = { label: "Rematch", disabled: false };
+      }
+    }
+    return view;
+  }
+
+  // What to tell screen reader users when the room changes from prev to next
+  // (two deriveOnlineState results). Called once per accepted version, so the
+  // same move is never announced twice. Returns "" when there is nothing new.
+  function describeOnlineChange(prev, next) {
+    if (!prev || !next) {
+      return "";
+    }
+    if (next.status === "closed" && prev.status !== "closed") {
+      if (next.leftBy === "opponent") return "Your friend left the game.";
+      if (next.leftBy === "me") return "";
+      return "Match closed.";
+    }
+    const parts = [];
+    const roundReset = prev.status === "finished" && next.board.every((v) => v === "");
+    if (roundReset) {
+      parts.push(next.myMark === "X" ? "New game. You are X and go first." : "New game. You are O. Opponent goes first.");
+      return parts.join(" ");
+    }
+    const placed = next.board.map((v, i) => (prev.board[i] === "" && v !== "" ? i : -1)).filter((i) => i >= 0);
+    if (placed.length === 1) {
+      const who = next.board[placed[0]] === next.myMark ? "You" : "Opponent";
+      parts.push(`${who} played ${squareName(placed[0])}.`);
+    } else if (placed.length > 1) {
+      parts.push("The board was updated.");
+    }
+    if (placed.length > 0) {
+      parts.push(next.status === "finished" ? onlineStatusText(next) : `${onlineStatusText(next)}.`);
+    }
+    if (next.rematch !== prev.rematch) {
+      if (next.rematch === "opponent") parts.push("Opponent wants a rematch.");
+      else if (next.rematch === "me") parts.push("Rematch requested. Waiting for your friend.");
+    }
+    return parts.join(" ");
   }
 
   // A room code spelled out for screen readers ("K7M2QX" -> "K 7 M 2 Q X"),
@@ -429,6 +539,10 @@ const TicTacToeOnline = ((Game) => {
     friendlyErrorMessage,
     getLobbyView,
     spellRoomCode,
+    squareName,
+    onlineStatusText,
+    getOnlineBoardView,
+    describeOnlineChange,
   };
 })(typeof module !== "undefined" && module.exports ? require("./game.js") : TicTacToeGame);
 

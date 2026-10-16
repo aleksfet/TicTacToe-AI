@@ -494,3 +494,129 @@ test("spellRoomCode spells the code out for screen readers", () => {
   assert.equal(Online.spellRoomCode("K7M2QX"), "K 7 M 2 Q X");
   assert.equal(Online.spellRoomCode(null), "");
 });
+
+// --- Online board (Phase 3D) ------------------------------------------------------------
+
+const boardView = (overrides, who, options) => Online.getOnlineBoardView(Online.deriveOnlineState(row(overrides), who), options);
+
+test("online status: your turn / opponent's turn, and only the player to move may click", () => {
+  const host = boardView({}, HOST);
+  const guest = boardView({}, GUEST);
+  assert.equal(host.status, "Your turn");
+  assert.equal(host.interactive, true);
+  assert.equal(guest.status, "Opponent's turn");
+  assert.equal(guest.interactive, false);
+  assert.equal(host.title, "Online Match");
+  assert.equal(host.badge, "You are X");
+  assert.equal(guest.badge, "You are O");
+  assert.equal(host.resultMark, null);
+  assert.equal(host.primary, null, "no Rematch during a game");
+  assert.deepEqual(host.leave, { label: "Leave Match", confirm: true });
+});
+
+test("online board stays locked while our own move is on its way", () => {
+  assert.equal(boardView({}, HOST, { pending: true }).interactive, false);
+});
+
+test("online results from each side, coloured by the winning mark", () => {
+  const won = { board: "XXXOO....", host_wins: 1 };
+  assert.equal(boardView(won, HOST).status, "You win!");
+  assert.equal(boardView(won, GUEST).status, "Opponent wins.");
+  assert.equal(boardView(won, HOST).resultMark, "x");
+  assert.equal(boardView(won, HOST).interactive, false);
+  const drawn = { board: "XOXXOOOXX", draws: 1 };
+  assert.equal(boardView(drawn, GUEST).status, "It's a draw!");
+  assert.equal(boardView(drawn, GUEST).resultMark, "draw");
+  // After a mark swap, O can win and the colour follows the mark.
+  assert.equal(boardView({ host_mark: "O", board: "OOOXX.X..", guest_wins: 0, host_wins: 1 }, HOST).resultMark, "o");
+});
+
+test("online scoreboard is You / Draws / Opponent from the server's per-person counts", () => {
+  const scored = { host_mark: "O", host_wins: 2, guest_wins: 5, draws: 3 };
+  assert.deepEqual(boardView(scored, HOST).scores, { you: 2, draws: 3, opponent: 5 });
+  assert.deepEqual(boardView(scored, GUEST).scores, { you: 5, draws: 3, opponent: 2 });
+});
+
+test("rematch button: Rematch -> waiting -> Accept Rematch", () => {
+  const finished = { board: "XXXOO....", host_wins: 1 };
+  assert.deepEqual(boardView(finished, HOST).primary, { label: "Rematch", disabled: false });
+  const asked = { ...finished, rematch_requested_by: HOST };
+  assert.deepEqual(boardView(asked, HOST).primary, { label: "Waiting for opponent…", disabled: true });
+  assert.equal(boardView(asked, HOST).note, "Rematch requested. Waiting for your friend.");
+  assert.deepEqual(boardView(asked, GUEST).primary, { label: "Accept Rematch", disabled: false });
+  assert.equal(boardView(asked, GUEST).note, "Opponent wants a rematch.");
+});
+
+test("closed match: no moves, no rematch, only Back", () => {
+  const closed = boardView({ board: "X........", left_by: GUEST }, HOST);
+  assert.equal(closed.status, "Match closed.");
+  assert.equal(closed.note, "Your friend left the game.");
+  assert.equal(closed.interactive, false);
+  assert.equal(closed.primary, null);
+  assert.deepEqual(closed.leave, { label: "Back", confirm: false });
+  assert.equal(closed.badge, null);
+  assert.equal(boardView({ left_by: GUEST }, GUEST).note, "You left this game.");
+});
+
+test("a stranger never gets an interactive online board", () => {
+  const view = boardView({}, STRANGER);
+  assert.equal(view.interactive, false);
+  assert.equal(view.status, "Match closed.");
+});
+
+test("lobby offers Start Match for a fresh game and Resume Match for one under way", () => {
+  const lobby = (overrides, who = HOST) => Online.getLobbyView(Online.deriveOnlineState(row(overrides), who));
+  assert.equal(lobby({}).startLabel, "Start Match");
+  assert.equal(lobby({ board: "X........", version: 3 }).startLabel, "Resume Match");
+  assert.equal(lobby({ board: "XXXOO....", host_wins: 1 }).startLabel, "Resume Match");
+  assert.equal(lobby({ guest_id: null }).startLabel, undefined, "no Start while waiting");
+});
+
+// --- Announcements --------------------------------------------------------------------
+
+const derive = (overrides, who) => Online.deriveOnlineState(row(overrides), who);
+
+test("announce the opponent's move and whose turn it is", () => {
+  const prev = derive({ board: ".........", version: 2 }, GUEST);
+  const next = derive({ board: "X........", version: 3 }, GUEST);
+  assert.equal(Online.describeOnlineChange(prev, next), "Opponent played Row 1, column 1. Your turn.");
+});
+
+test("announce our own confirmed move", () => {
+  const prev = derive({ board: "X........", version: 3 }, GUEST);
+  const next = derive({ board: "X...O....", version: 4 }, GUEST);
+  assert.equal(Online.describeOnlineChange(prev, next), "You played Row 2, column 2. Opponent's turn.");
+});
+
+test("announce a win, a loss and a draw", () => {
+  const before = derive({ board: "XX.OO....", version: 6 }, HOST);
+  assert.equal(Online.describeOnlineChange(before, derive({ board: "XXXOO....", version: 7 }, HOST)), "You played Row 1, column 3. You win!");
+  const beforeG = derive({ board: "XX.OO....", version: 6 }, GUEST);
+  assert.equal(Online.describeOnlineChange(beforeG, derive({ board: "XXXOO....", version: 7 }, GUEST)), "Opponent played Row 1, column 3. Opponent wins.");
+  const almost = derive({ board: "XOXXOOOX.", version: 9 }, HOST);
+  assert.equal(Online.describeOnlineChange(almost, derive({ board: "XOXXOOOXX", version: 10 }, HOST)), "You played Row 3, column 3. It's a draw!");
+});
+
+test("announce rematch requests and the new round with swapped marks", () => {
+  const done = derive({ board: "XXXOO....", version: 7 }, GUEST);
+  const asked = derive({ board: "XXXOO....", version: 8, rematch_requested_by: HOST }, GUEST);
+  assert.equal(Online.describeOnlineChange(done, asked), "Opponent wants a rematch.");
+  const restarted = derive({ board: ".........", version: 9, host_mark: "O" }, GUEST);
+  assert.equal(Online.describeOnlineChange(asked, restarted), "New game. You are X and go first.");
+  const hostView = Online.describeOnlineChange(derive({ board: "XXXOO....", version: 8, rematch_requested_by: HOST }, HOST),
+    derive({ board: ".........", version: 9, host_mark: "O" }, HOST));
+  assert.equal(hostView, "New game. You are O. Opponent goes first.");
+});
+
+test("announce the friend leaving, but not our own leaving", () => {
+  const playing = derive({ board: "X........" }, HOST);
+  assert.equal(Online.describeOnlineChange(playing, derive({ board: "X........", left_by: GUEST }, HOST)), "Your friend left the game.");
+  assert.equal(Online.describeOnlineChange(playing, derive({ board: "X........", left_by: HOST }, HOST)), "");
+});
+
+test("several missed moves at once are summarised; nothing new means nothing to say", () => {
+  const prev = derive({ board: "X........" }, GUEST);
+  assert.equal(Online.describeOnlineChange(prev, derive({ board: "XO.X.....", version: 5 }, GUEST)), "The board was updated. Your turn.");
+  assert.equal(Online.describeOnlineChange(prev, prev), "");
+  assert.equal(Online.describeOnlineChange(null, prev), "");
+});

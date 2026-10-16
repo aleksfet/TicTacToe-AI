@@ -53,10 +53,12 @@ function showScreen(screenId) {
 
   // Opening the board always begins a fresh game. Leaving it also clears it,
   // so a game abandoned mid-turn doesn't linger on the hidden board.
-  if (screenId === "player-screen" || fromId === "player-screen") {
+  // (An online match is drawn from the server's copy instead, by online-ui.js.)
+  const openingLocalGame = screenId === "player-screen" && gameMode !== "online";
+  if (openingLocalGame || fromId === "player-screen") {
     resetGame();
   }
-  if (screenId === "player-screen") {
+  if (openingLocalGame) {
     announce("New game. " + statusText.textContent);
   }
 
@@ -82,6 +84,7 @@ function returnFocusTargets() {
     },
     "online-screen": {
       "lobby-screen": "#create-game",
+      "player-screen": "#create-game",
     },
   };
 }
@@ -163,6 +166,8 @@ const difficultyBadge = document.getElementById("difficulty-badge");
 const restartButton = document.getElementById("restart");
 const resetScoreButton = document.getElementById("reset-score");
 const explanationEl = document.getElementById("ai-explanation");
+const localControls = document.getElementById("local-controls");
+const onlineControls = document.getElementById("online-controls");
 
 // Holds the most recent "why the computer moved" text, from the AI's choice.
 let aiExplanation = "";
@@ -173,6 +178,7 @@ const scoreLabelO = document.getElementById("score-label-o");
 const scoreValueX = document.getElementById("score-x");
 const scoreValueO = document.getElementById("score-o");
 const scoreValueDraws = document.getElementById("score-draws");
+const scoreboardEl = document.querySelector("#player-screen .scoreboard");
 
 // Session scores. "x" counts X / You wins, "o" counts O / Computer wins.
 // (The human is always X and the computer is always O, so this lines up.)
@@ -191,7 +197,13 @@ let gameOver = false;      // becomes true once someone wins or it's a draw
 //   "easy"       = human is X, computer is O, computer plays random moves
 //   "medium"     = human is X, computer is O, computer plays smarter moves
 //   "impossible" = human is X, computer is O, computer uses Minimax (perfect)
+//   "online"     = two people on different devices (src/online-ui.js). The
+//                  server's copy of the game is the truth: this file never
+//                  places a mark in online mode, it only passes the click on.
 let gameMode = "player";
+
+// In online mode, square clicks go to this function (set by online-ui.js).
+let onlineMoveHandler = null;
 
 // True whenever the computer is one of the players.
 function isComputerMode() {
@@ -214,20 +226,54 @@ function cellPosition(index) {
 
 // Give a cell its screen reader name, e.g. "Row 1, column 2, empty" or
 // "Row 2, column 3, X". The visible cell is unchanged.
-function updateCellLabel(index) {
-  const value = board[index] === "" ? "empty" : board[index];
-  cells[index].setAttribute("aria-label", cellPosition(index) + ", " + value);
+function cellLabel(index, value) {
+  return cellPosition(index) + ", " + (value === "" ? "empty" : value);
 }
 
-// Mark the board as playable or not. While the computer is thinking, or once
-// the game is over, the whole board is "locked": no hover, no pointer cursor,
-// and every cell reports aria-disabled. (aria-disabled, not the disabled
-// attribute, so a focused cell keeps keyboard focus.)
-function updateBoardState() {
-  const locked = lockBoard || gameOver;
+function updateCellLabel(index) {
+  cells[index].setAttribute("aria-label", cellLabel(index, board[index]));
+}
+
+// Draw the whole board from a list of 9 values ("", "X" or "O"). Used by
+// every mode: local, the computer modes and online play.
+//   options.winningLine  the three cells to highlight, or null
+//   options.locked       true when no square can be played right now: no
+//                        hover, no pointer cursor, and every cell reports
+//                        aria-disabled. (aria-disabled, not the disabled
+//                        attribute, so a focused cell keeps keyboard focus.)
+// Only cells whose mark changed are touched, so marks already on the board
+// don't replay their pop-in animation.
+function renderBoard(values, { winningLine = null, locked = false } = {}) {
+  values.forEach((value, index) => {
+    const cell = cells[index];
+    if (cell.textContent !== value) {
+      if (value === "") {
+        cell.textContent = "";
+        cell.classList.remove("taken", "x", "o");
+      } else {
+        // Wrap the mark in a span so it can pop in (see the .mark CSS animation).
+        cell.innerHTML = '<span class="mark">' + value + "</span>";
+        cell.classList.remove(value === "X" ? "o" : "x");
+        cell.classList.add("taken");
+        cell.classList.add(value === "X" ? "x" : "o");
+      }
+    }
+    cell.classList.toggle("win", Boolean(winningLine) && winningLine.includes(index));
+    cell.setAttribute("aria-label", cellLabel(index, value));
+  });
   boardEl.classList.toggle("locked", locked);
   cells.forEach((cell, index) => {
-    cell.setAttribute("aria-disabled", String(locked || board[index] !== ""));
+    cell.setAttribute("aria-disabled", String(locked || values[index] !== ""));
+  });
+}
+
+// Redraw the local game's board. While the computer is thinking, or once the
+// game is over, the whole board is locked; a finished game keeps its winning
+// line highlighted.
+function updateBoardState() {
+  renderBoard(board, {
+    winningLine: gameOver ? TicTacToeGame.findWinningLine(board) : null,
+    locked: lockBoard || gameOver,
   });
 }
 
@@ -242,12 +288,6 @@ function announce(message) {
 // Put a mark ("X" or "O") into a cell, both in the data and on the screen.
 function placeMark(index, player) {
   board[index] = player;
-  const cell = cells[index];
-  // Wrap the mark in a span so it can pop in (see the .mark CSS animation).
-  cell.innerHTML = '<span class="mark">' + player + "</span>";
-  cell.classList.add("taken");
-  cell.classList.add(player === "X" ? "x" : "o");
-  updateCellLabel(index);
   updateBoardState();
 }
 
@@ -324,9 +364,8 @@ function checkGameEnd() {
     statusText.textContent = winMessage(winner);
     // Big result text, colored to match the winner (X = blue, O = pink).
     statusText.classList.add("result", winner === "X" ? "result-x" : "result-o");
-    winningLine.forEach((i) => cells[i].classList.add("win"));
     recordResult(winner);
-    updateBoardState();
+    updateBoardState(); // highlights the winning line and locks the board
     return true;
   }
 
@@ -389,6 +428,14 @@ function computerMove() {
 function handleCellClick(event) {
   const cell = event.currentTarget;
   const index = Number(cell.getAttribute("data-index"));
+
+  // Online: the server decides; online-ui.js sends the move and redraws.
+  if (gameMode === "online") {
+    if (onlineMoveHandler) {
+      onlineMoveHandler(index);
+    }
+    return;
+  }
 
   // Ignore the click if the game is over, the board is locked (computer is
   // thinking), or the cell is already filled.
@@ -474,13 +521,66 @@ function resetGame() {
 
   showTurnStatus();
 
-  // Wipe the marks and any highlight/color classes off every cell.
-  cells.forEach((cell, index) => {
-    cell.textContent = "";
-    cell.classList.remove("taken", "x", "o", "win");
-    updateCellLabel(index);
-  });
+  // Local controls (Restart / Reset Score) belong to every non-online game.
+  localControls.hidden = false;
+  onlineControls.hidden = true;
+  scoreboardEl.classList.remove("is-online");
+
+  // Wipe the marks and any highlight off every cell.
   updateBoardState();
+}
+
+// --- The same game screen, used by online play (src/online-ui.js) ---
+//
+// Online play draws the board with renderBoard() above and fills in the rest
+// of the screen with these small helpers. Nothing here keeps score or decides
+// moves: online, the server does that.
+
+// Switch the game screen to online mode and show it. onMove(index) is called
+// when the player activates a square.
+function enterOnlineBoard(onMove) {
+  clearTimeout(computerTimer);
+  lockBoard = false;
+  gameMode = "online";
+  onlineMoveHandler = onMove;
+  localControls.hidden = true;
+  onlineControls.hidden = false;
+  // Online scores are per person (You / Opponent) and marks swap on every
+  // rematch, so the score numbers drop the X / O colours (see styles.css).
+  scoreboardEl.classList.add("is-online");
+  explanationEl.hidden = false;
+  showScreen("player-screen");
+}
+
+// Title and the small badge under it (null hides the badge).
+function setBoardHeader(title, badge) {
+  boardTitle.textContent = title;
+  difficultyBadge.textContent = badge || "";
+  difficultyBadge.classList.toggle("hidden", !badge);
+}
+
+// The turn / result line. resultMark "x", "o" or "draw" shows the big
+// coloured result style; null shows a normal turn line.
+function setStatusLine(text, resultMark) {
+  clearResultStyle();
+  statusText.textContent = text;
+  if (resultMark) {
+    statusText.classList.add("result", "result-" + resultMark);
+  }
+}
+
+// The three score boxes: labels and numbers.
+function setScoreboard(leftLabel, rightLabel, left, right, draws) {
+  scoreLabelX.textContent = leftLabel;
+  scoreLabelO.textContent = rightLabel;
+  scoreValueX.textContent = left;
+  scoreValueO.textContent = right;
+  scoreValueDraws.textContent = draws;
+}
+
+// The small note under the board (used for AI explanations offline).
+function setBoardNote(text) {
+  explanationEl.textContent = text;
 }
 
 // Wire up the cell clicks and the buttons.

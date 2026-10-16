@@ -463,6 +463,14 @@ button:focus-visible {
   color: var(--o-color);
 }
 
+/* Online the boxes are You / Draws / Opponent, and the marks swap on every
+   rematch, so all three numbers use the neutral text colour instead of the
+   X / O colours (local and computer games keep them). */
+.scoreboard.is-online #score-x,
+.scoreboard.is-online #score-o {
+  color: var(--text);
+}
+
 /* --- The game board --- */
 
 /* A 3x3 square board, at most 360px. Its width is the smallest of:
@@ -770,6 +778,7 @@ button:focus-visible {
   margin-top: 1rem;
   display: flex;
   flex-direction: column;
+  gap: 0.6rem;
 }
 
 .leave-confirm {
@@ -907,6 +916,15 @@ button:focus-visible {
   }
   .join-form {
     margin-top: 1.1rem;
+  }
+  /* The leave confirmation replaces one button, so keep it compact. */
+  .leave-confirm {
+    padding: 0.45rem 0.6rem;
+  }
+  .leave-confirm-text {
+    margin-bottom: 0.35rem;
+    font-size: 0.88rem;
+    line-height: 1.3;
   }
 }
 
