@@ -1,8 +1,9 @@
 /*
   Tic Tac Toe AI - styles
 
-  Step 1: styling for the start screen and the placeholder screens.
-  The layout is a single centered "card" on a light background.
+  Styling for every screen: the start menu, difficulty menu, How to Play,
+  and the game board. The layout is a single centered "card" on a themed
+  background.
 
   Beginner notes:
   - Colors are written as #rrggbb (red/green/blue in hex).
@@ -12,7 +13,7 @@
 */
 
 /* The default values here are the "Classic Arena" theme. The other themes
-   (Neon, Sunset) just override these variables on the <body> element, so the
+   (Ocean, Neon) just override these variables on the <body> element, so the
    whole page recolors at once. */
 :root {
   --bg-top: #f5f7fa; /* light background, top of the gradient */
@@ -211,21 +212,6 @@ body {
 /* A tiny press-down effect when the button is clicked. */
 .btn:active {
   transform: scale(0.98);
-}
-
-/* Disabled buttons (e.g. Medium / Impossible) look faded and unclickable. */
-.btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-/* Keep a disabled button from changing color or pressing down on hover/click. */
-.btn:disabled:hover {
-  background: var(--btn);
-}
-
-.btn:disabled:active {
-  transform: none;
 }
 
 /* The lighter "Back" / "How to Play" style. */
@@ -480,7 +466,6 @@ body {
   animation: win-pulse 1s ease-in-out infinite;
 }
 
-.cell.win:not(.taken):hover,
 .cell.win:hover {
   background: var(--win-bg);
 }

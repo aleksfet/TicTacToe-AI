@@ -1,6 +1,10 @@
-// Tic Tac Toe AI - game logic
+// Tic Tac Toe AI - browser UI
 //
-// What works so far:
+// This file handles the page: screens, themes, clicks, the scoreboard and the
+// "Computer thinking..." pause. The game rules live in src/game.js and the
+// computer players live in src/ai.js (both load before this file).
+//
+// Features:
 //   - Screen switching (start menu <-> difficulty menu <-> the board).
 //   - Play vs Player: two humans take turns on the board.
 //   - Play vs Computer (Easy): you are X, the computer is O and plays a
@@ -18,8 +22,8 @@
 //   - Only one is visible; the rest have the "hidden" class.
 //   - Any button with a data-target attribute, when clicked, hides every
 //     screen and then shows the screen whose id matches that data-target.
-//   - A button can also carry data-mode ("player" or "easy") to say which
-//     kind of game to start when it opens the board.
+//   - A button can also carry data-mode ("player", "easy", "medium", or
+//     "impossible") to say which kind of game to start when it opens the board.
 // ---------------------------------------------------------------------------
 
 const screens = document.querySelectorAll(".screen");
@@ -61,8 +65,8 @@ navButtons.forEach((button) => {
 // ---------------------------------------------------------------------------
 // Arena (theme) selection
 //
-//   - Each theme is a CSS class on <body> ("theme-classic", "theme-neon",
-//     "theme-sunset") that overrides the color variables.
+//   - Each theme is a CSS class on <body> ("theme-classic", "theme-ocean",
+//     "theme-neon"); Ocean and Neon override the color variables.
 //   - The chosen theme is just a body class, so it stays put no matter which
 //     screen is shown (switching screens never touches the body class).
 // ---------------------------------------------------------------------------
@@ -100,7 +104,7 @@ const restartButton = document.getElementById("restart");
 const resetScoreButton = document.getElementById("reset-score");
 const explanationEl = document.getElementById("ai-explanation");
 
-// Holds the most recent "why the computer moved" text, set by the AI choosers.
+// Holds the most recent "why the computer moved" text, from the AI's choice.
 let aiExplanation = "";
 
 // Scoreboard pieces: the two labels that change per mode, and the three values.
@@ -118,7 +122,7 @@ let scores = { x: 0, o: 0, draws: 0 };
 //   0 | 1 | 2
 //   3 | 4 | 5
 //   6 | 7 | 8
-let board = ["", "", "", "", "", "", "", "", ""];
+let board = TicTacToeGame.createEmptyBoard();
 let currentPlayer = "X";   // X always goes first
 let gameOver = false;      // becomes true once someone wins or it's a draw
 
@@ -140,25 +144,6 @@ let lockBoard = false;
 // Remembers the pending "computer thinking" timer so we can cancel it if the
 // player restarts or leaves before the computer has moved.
 let computerTimer = null;
-
-// All eight winning lines, written as the three cell indexes that make them.
-const WINNING_LINES = [
-  [0, 1, 2], [3, 4, 5], [6, 7, 8],   // rows
-  [0, 3, 6], [1, 4, 7], [2, 5, 8],   // columns
-  [0, 4, 8], [2, 4, 6],              // diagonals
-];
-
-// Return the winning line (array of 3 indexes) if someone has won, else null.
-function findWinningLine() {
-  for (const line of WINNING_LINES) {
-    const [a, b, c] = line;
-    // All three must be non-empty AND equal to each other.
-    if (board[a] !== "" && board[a] === board[b] && board[a] === board[c]) {
-      return line;
-    }
-  }
-  return null;
-}
 
 // Put a mark ("X" or "O") into a cell, both in the data and on the screen.
 function placeMark(index, player) {
@@ -236,7 +221,7 @@ function recordResult(winner) {
 // Check whether the game just ended. If so, set gameOver + status and (for a
 // win) highlight the winning cells. Returns true when the game is over.
 function checkGameEnd() {
-  const winningLine = findWinningLine();
+  const winningLine = TicTacToeGame.findWinningLine(board);
   if (winningLine) {
     gameOver = true;
     const winner = board[winningLine[0]];
@@ -249,7 +234,7 @@ function checkGameEnd() {
   }
 
   // Board full with no winner => draw.
-  if (board.every((value) => value !== "")) {
+  if (TicTacToeGame.isBoardFull(board)) {
     gameOver = true;
     statusText.textContent = "It's a draw!";
     // Big result text in a neutral gold color.
@@ -261,195 +246,6 @@ function checkGameEnd() {
   return false;
 }
 
-// --- Helpers the computer uses to choose a move ---
-
-// Return the indexes of every empty cell (so we only ever pick empty ones).
-function emptyIndexes() {
-  const result = [];
-  board.forEach((value, index) => {
-    if (value === "") {
-      result.push(index);
-    }
-  });
-  return result;
-}
-
-// Pick a random item from a list.
-function randomFrom(list) {
-  return list[Math.floor(Math.random() * list.length)];
-}
-
-// If "player" has two marks in a line with the third cell empty, return that
-// empty cell's index (the move that would complete the line). Otherwise null.
-// Used both to find the computer's own winning move and to block the human.
-function findCompletingMove(player) {
-  for (const line of WINNING_LINES) {
-    const marks = line.map((i) => board[i]);
-    const ownCount = marks.filter((m) => m === player).length;
-    const emptyCount = marks.filter((m) => m === "").length;
-    if (ownCount === 2 && emptyCount === 1) {
-      return line[marks.indexOf("")]; // the one empty cell in this line
-    }
-  }
-  return null;
-}
-
-// Easy: just pick a random empty cell.
-function chooseEasyMove() {
-  const empties = emptyIndexes();
-  return empties.length > 0 ? randomFrom(empties) : null;
-}
-
-// How often Medium uses its smart logic (0.65 = about 65% of the time).
-// The rest of the time it just plays a random empty square, which keeps it
-// beatable and less predictable than a perfect player.
-const MEDIUM_SMART_CHANCE = 0.65;
-
-// The "smart" part of Medium: a simple priority order. Each branch also records
-// a short explanation of what it did (this does not change which move is made).
-function chooseMediumSmartMove() {
-  // 1. Take an immediate win if there is one (computer is O).
-  let move = findCompletingMove("O");
-  if (move !== null) {
-    aiExplanation = "Medium AI found a winning move.";
-    return move;
-  }
-
-  // 2. Otherwise block the human (X) if they are about to win.
-  move = findCompletingMove("X");
-  if (move !== null) {
-    aiExplanation = "Medium AI blocked your threat.";
-    return move;
-  }
-
-  // 3. Take the center if it is open.
-  if (board[4] === "") {
-    aiExplanation = "Medium AI took the center.";
-    return 4;
-  }
-
-  // 4. Take a random open corner.
-  const openCorners = [0, 2, 6, 8].filter((i) => board[i] === "");
-  if (openCorners.length > 0) {
-    aiExplanation = "Medium AI chose a corner.";
-    return randomFrom(openCorners);
-  }
-
-  // 5. Fall back to any random empty square.
-  const empties = emptyIndexes();
-  aiExplanation = "Medium AI made a random move.";
-  return empties.length > 0 ? randomFrom(empties) : null;
-}
-
-// Medium: mix smart play with random play so it feels like a casual opponent.
-//   - ~65% of turns: use the smart priority logic above.
-//   - ~35% of turns: ignore strategy and just pick a random empty square.
-function chooseMediumMove() {
-  if (Math.random() < MEDIUM_SMART_CHANCE) {
-    return chooseMediumSmartMove(); // sets its own explanation per branch
-  }
-  aiExplanation = "Medium AI made a random move.";
-  return chooseEasyMove(); // a plain random empty square
-}
-
-// --- Impossible mode: the Minimax algorithm ---
-
-// Check a *hypothetical* board (not the real one) and return its winner:
-// "X", "O", or null if nobody has three in a row yet.
-function winnerOf(state) {
-  for (const line of WINNING_LINES) {
-    const [a, b, c] = line;
-    if (state[a] !== "" && state[a] === state[b] && state[a] === state[c]) {
-      return state[a];
-    }
-  }
-  return null;
-}
-
-// Minimax looks ahead at EVERY possible way the game could finish and scores it:
-//   - O (the computer) tries to get the HIGHEST score  -> it "maximizes".
-//   - X (the human)    tries to get the LOWEST score   -> it "minimizes".
-// Scores: O win = +10, X win = -10, draw = 0. We also use "depth" (how many
-// moves deep we are) so the computer prefers winning sooner and losing later.
-//
-// "state" is a copy of the board that we change and then change back as we try
-// each possible move (this is called recursion: the function calls itself to
-// explore the next move).
-function minimax(state, computerToMove, depth) {
-  // First, see if this imagined board is already finished.
-  const winner = winnerOf(state);
-  if (winner === "O") {
-    return 10 - depth; // computer wins (sooner is better)
-  }
-  if (winner === "X") {
-    return depth - 10; // human wins (later is "less bad")
-  }
-  if (state.every((cell) => cell !== "")) {
-    return 0; // no empty cells and no winner => draw
-  }
-
-  if (computerToMove) {
-    // The computer (O) wants the highest score it can reach.
-    let bestScore = -Infinity;
-    for (let i = 0; i < 9; i++) {
-      if (state[i] === "") {
-        state[i] = "O";                                   // try this move
-        const score = minimax(state, false, depth + 1);   // human replies next
-        state[i] = "";                                    // undo the move
-        bestScore = Math.max(bestScore, score);
-      }
-    }
-    return bestScore;
-  } else {
-    // The human (X) is assumed to play their best, picking the lowest score.
-    let bestScore = Infinity;
-    for (let i = 0; i < 9; i++) {
-      if (state[i] === "") {
-        state[i] = "X";                                   // try this move
-        const score = minimax(state, true, depth + 1);    // computer replies next
-        state[i] = "";                                    // undo the move
-        bestScore = Math.min(bestScore, score);
-      }
-    }
-    return bestScore;
-  }
-}
-
-// Impossible: try every empty cell, score it with minimax, and keep the best.
-function chooseImpossibleMove() {
-  const state = board.slice(); // a copy we can safely experiment on
-  let bestScore = -Infinity;
-  let bestMove = null;
-
-  for (let i = 0; i < 9; i++) {
-    if (state[i] === "") {
-      state[i] = "O";                                 // imagine playing here
-      const score = minimax(state, false, 1);         // then the human moves
-      state[i] = "";                                  // undo
-      if (score > bestScore) {
-        bestScore = score;
-        bestMove = i;
-      }
-    }
-  }
-
-  return bestMove;
-}
-
-// Pick the computer's move based on the current difficulty.
-// Each branch also records an explanation (Medium sets its own, per-branch).
-function chooseComputerMove() {
-  if (gameMode === "medium") {
-    return chooseMediumMove();
-  }
-  if (gameMode === "impossible") {
-    aiExplanation = "Impossible AI used Minimax to search future outcomes and pick the best move.";
-    return chooseImpossibleMove();
-  }
-  aiExplanation = "Easy AI picked a random open square.";
-  return chooseEasyMove(); // easy (and any other computer mode for now)
-}
-
 // The computer's move: choose a cell, play O there, then hand back to the human.
 function computerMove() {
   // Safety check: never move if the game is already over.
@@ -458,15 +254,17 @@ function computerMove() {
     return;
   }
 
-  const choice = chooseComputerMove();
-  if (choice === null) {
+  // Ask the AI (src/ai.js) for a move and the reason behind it.
+  const choice = TicTacToeAI.chooseComputerMove(gameMode, board);
+  aiExplanation = choice.explanation;
+  if (choice.index === null) {
     lockBoard = false;
     return; // no empty cells left
   }
 
-  placeMark(choice, "O");
+  placeMark(choice.index, "O");
 
-  // Show what the AI just did (set by chooseComputerMove). Done before the
+  // Show what the AI just did (from the AI's choice). Done before the
   // game-over check so it still appears on a game-ending computer move.
   explanationEl.textContent = aiExplanation;
 
@@ -523,7 +321,7 @@ function resetGame() {
   // Cancel a pending computer move so it can't land on the fresh board.
   clearTimeout(computerTimer);
 
-  board = ["", "", "", "", "", "", "", "", ""];
+  board = TicTacToeGame.createEmptyBoard();
   currentPlayer = "X";
   gameOver = false;
   lockBoard = false;

@@ -1,0 +1,9 @@
+{
+  "name": "tictactoe-ai-arena",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tic Tac Toe in the browser with Easy, Medium and Impossible (Minimax) computer opponents.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
