@@ -359,3 +359,138 @@ test("no error gives null", () => {
   assert.equal(Online.normalizeBackendError(null), null);
   assert.equal(Online.normalizeBackendError(undefined), null);
 });
+
+// --- Invite links in the address bar (Phase 3C) -------------------------------------
+
+test("getInviteFromUrl tells apart no invite, a valid invite and a broken one", () => {
+  assert.deepEqual(Online.getInviteFromUrl("https://example.com/"), { status: "none" });
+  assert.deepEqual(Online.getInviteFromUrl("https://example.com/?theme=neon"), { status: "none" });
+  assert.deepEqual(Online.getInviteFromUrl("https://example.com/?room=k7m2qx"), { status: "valid", code: "K7M2QX" });
+  assert.deepEqual(Online.getInviteFromUrl("https://example.com/?room=K7M-2QX&x=1"), { status: "valid", code: "K7M2QX" });
+  for (const broken of ["https://example.com/?room=", "https://example.com/?room=K7M2Q", "https://example.com/?room=K7M2QO", "https://example.com/?room=%3Cb%3E"]) {
+    assert.deepEqual(Online.getInviteFromUrl(broken), { status: "invalid" }, broken);
+  }
+  assert.deepEqual(Online.getInviteFromUrl("not a url"), { status: "none" });
+});
+
+test("removeRoomFromUrl drops ?room= and keeps everything else", () => {
+  assert.equal(Online.removeRoomFromUrl("https://example.com/?room=K7M2QX"), "https://example.com/");
+  assert.equal(Online.removeRoomFromUrl("https://example.com/app/?theme=neon&room=K7M2QX"), "https://example.com/app/?theme=neon");
+  assert.equal(Online.removeRoomFromUrl("https://example.com/"), "https://example.com/");
+  assert.equal(Online.removeRoomFromUrl("not a url"), null);
+});
+
+// --- Friendly error messages ------------------------------------------------------
+
+test("each game error gets its player-facing message", () => {
+  const cases = {
+    ROOM_FULL: "This game already has two players.",
+    ROOM_NOT_FOUND: "Game not found. Check the code and try again.",
+    ROOM_EXPIRED: "This game has expired. Ask your friend to create a new one.",
+    ROOM_CLOSED: "This game has been closed.",
+    INVALID_ROOM_CODE: "Enter a valid 6-character room code.",
+    ROOM_CODE_UNAVAILABLE: "Couldn't create a room. Try again.",
+  };
+  for (const [code, message] of Object.entries(cases)) {
+    assert.deepEqual(Online.friendlyErrorMessage({ code: "P0001", message: code }), { code, message });
+  }
+});
+
+test("sign-in problems never mention accounts or authentication", () => {
+  const result = Online.friendlyErrorMessage({ code: "P0001", message: "NOT_AUTHENTICATED" });
+  assert.equal(result.code, "CONNECTION");
+  assert.doesNotMatch(result.message, /auth|account|login|sign/i);
+});
+
+test("connection problems say online play is unavailable", () => {
+  const unavailable = [
+    new Error("SUPABASE_LIBRARY_UNAVAILABLE"),
+    new TypeError("Failed to fetch"),
+    Object.assign(new Error("Load failed"), {}),
+    Object.assign(new Error("x"), { name: "AuthRetryableFetchError", status: 0 }),
+    Object.assign(new Error("Service Unavailable"), { status: 503 }),
+  ];
+  for (const error of unavailable) {
+    assert.deepEqual(Online.friendlyErrorMessage(error), { code: "UNAVAILABLE", message: "Online play is unavailable right now. Try again." });
+  }
+});
+
+test("rate limits and anything unknown get polite, non-technical messages", () => {
+  assert.equal(Online.friendlyErrorMessage(Object.assign(new Error("Request rate limit reached"), { status: 429 })).code, "TOO_MANY_ATTEMPTS");
+  const unknown = Online.friendlyErrorMessage({ code: "42501", message: "permission denied for function create_game" });
+  assert.equal(unknown.code, "GENERIC");
+  // Game errors that the lobby never expects still read politely.
+  assert.equal(Online.friendlyErrorMessage({ code: "P0001", message: "NOT_YOUR_TURN" }).code, "GENERIC");
+});
+
+test("no player-facing message contains technical words", () => {
+  for (const message of Object.values(Online.MESSAGES)) {
+    assert.doesNotMatch(message, /P0001|42501|supabase|postgres|jwt|auth|rpc|account|login|password|email/i, message);
+  }
+});
+
+// --- Lobby view -------------------------------------------------------------------------
+
+test("lobby while joining from a link", () => {
+  const view = Online.getLobbyView(null);
+  assert.equal(view.phase, "joining");
+  assert.equal(view.status, "Joining game…");
+  assert.equal(view.showInvite, false);
+  assert.equal(view.leaveLabel, "Cancel");
+  assert.equal(view.confirmLeave, false);
+});
+
+test("host waiting alone sees the invite and can cancel without confirming", () => {
+  const view = Online.getLobbyView(Online.deriveOnlineState(row({ guest_id: null, version: 1 }), HOST));
+  assert.equal(view.phase, "waiting");
+  assert.equal(view.status, "Waiting for opponent…");
+  assert.equal(view.showCode, true);
+  assert.equal(view.showInvite, true);
+  assert.equal(view.badge, "You are X");
+  assert.equal(view.leaveLabel, "Cancel");
+  assert.equal(view.confirmLeave, false);
+});
+
+test("match ready, from both sides", () => {
+  const host = Online.getLobbyView(Online.deriveOnlineState(row(), HOST));
+  const guest = Online.getLobbyView(Online.deriveOnlineState(row(), GUEST));
+  for (const view of [host, guest]) {
+    assert.equal(view.phase, "ready");
+    assert.equal(view.status, "Match ready");
+    assert.equal(view.showInvite, false, "the room is full, no more invites");
+    assert.equal(view.leaveLabel, "Leave Match");
+    assert.equal(view.confirmLeave, true, "leaving closes the room for the friend");
+  }
+  assert.equal(host.badge, "You are X");
+  assert.match(host.note, /Your friend joined\. You are X and go first\./);
+  assert.equal(guest.badge, "You are O");
+  assert.match(guest.note, /You joined your friend's game\. You are O\. Your friend goes first\./);
+});
+
+test("after a rematch swap the lobby describes the new marks", () => {
+  const view = Online.getLobbyView(Online.deriveOnlineState(row({ host_mark: "O" }), GUEST));
+  assert.equal(view.badge, "You are X");
+  assert.match(view.note, /You are X and go first/);
+});
+
+test("closed rooms explain who left and offer only Back", () => {
+  const byGuest = row({ left_by: GUEST });
+  assert.equal(Online.getLobbyView(Online.deriveOnlineState(byGuest, HOST)).status, "Your friend left the game.");
+  assert.equal(Online.getLobbyView(Online.deriveOnlineState(byGuest, GUEST)).status, "You left this game.");
+  const view = Online.getLobbyView(Online.deriveOnlineState(byGuest, HOST));
+  assert.equal(view.phase, "closed");
+  assert.equal(view.showInvite, false);
+  assert.equal(view.leaveLabel, "Back");
+  assert.equal(view.confirmLeave, false);
+  // A waiting room the host cancelled.
+  assert.equal(Online.getLobbyView(Online.deriveOnlineState(row({ guest_id: null, left_by: HOST }), HOST)).phase, "closed");
+});
+
+test("someone who is not in the room never sees a usable lobby", () => {
+  assert.equal(Online.getLobbyView(Online.deriveOnlineState(row(), STRANGER)).phase, "closed");
+});
+
+test("spellRoomCode spells the code out for screen readers", () => {
+  assert.equal(Online.spellRoomCode("K7M2QX"), "K 7 M 2 Q X");
+  assert.equal(Online.spellRoomCode(null), "");
+});

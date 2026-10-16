@@ -2,11 +2,14 @@
 //
 // This file handles the page: screens, themes, clicks, the scoreboard and the
 // "Computer thinking..." pause. The game rules live in src/game.js and the
-// computer players live in src/ai.js (both load before this file).
+// computer players live in src/ai.js (both load before this file). Online
+// play (create / invite / join) lives in src/online-ui.js, which loads after
+// this file and uses showScreen() and announce() from here.
 //
 // Features:
-//   - Screen switching (start menu <-> difficulty menu <-> the board).
-//   - Play vs Player: two humans take turns on the board.
+//   - Screen switching (start menu <-> difficulty menu <-> the board, and the
+//     "Play with a Friend" menus).
+//   - Play with a Friend -> Same Device: two humans take turns on the board.
 //   - Play vs Computer (Easy): you are X, the computer is O and plays a
 //     random empty cell after a short "thinking" pause.
 //   - Play vs Computer (Medium): a casual opponent. Most of the time it
@@ -62,24 +65,38 @@ function showScreen(screenId) {
   }
 }
 
+// Going BACK to a menu puts focus on the button that led away from it, so a
+// keyboard user picks up where they left off. Listed as
+// "menu screen" -> { "screen we came back from": "button to focus" }.
+function returnFocusTargets() {
+  const gameButton = gameMode === "player" ? '[data-target="friend-screen"]' : '[data-target="computer-screen"]';
+  return {
+    "start-screen": {
+      "how-screen": '[data-target="how-screen"]',
+      "computer-screen": '[data-target="computer-screen"]',
+      "friend-screen": '[data-target="friend-screen"]',
+      "player-screen": gameButton,
+    },
+    "friend-screen": {
+      "online-screen": '[data-target="online-screen"]',
+    },
+    "online-screen": {
+      "lobby-screen": "#create-game",
+    },
+  };
+}
+
 // Where keyboard focus goes after a screen switch:
-//   - back on the start menu: the button that led away from it, so a keyboard
-//     user picks up where they left off;
+//   - back on a menu: the button that led away from it (see above);
 //   - anywhere else: the new screen's heading (it has tabindex="-1" so it can
 //     take focus without becoming a Tab stop).
 function moveFocusInto(screen, fromId) {
-  if (screen.id === "start-screen" && fromId) {
-    let selector = '[data-target="computer-screen"]';
-    if (fromId === "how-screen") {
-      selector = '[data-target="how-screen"]';
-    } else if (fromId === "player-screen" && gameMode === "player") {
-      selector = '[data-mode="player"]';
-    }
-    const button = screen.querySelector(selector);
-    if (button) {
-      button.focus();
-      return;
-    }
+  const targets = returnFocusTargets()[screen.id];
+  const selector = targets && fromId ? targets[fromId] : null;
+  const button = selector ? screen.querySelector(selector) : null;
+  if (button) {
+    button.focus();
+    return;
   }
   const heading = screen.querySelector("h1, h2");
   if (heading) {

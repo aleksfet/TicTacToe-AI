@@ -39,6 +39,7 @@
   --win-border: #3fbf6f; /* border around the winning cells */
   --draw-color: #9a7012; /* "It's a draw!" text color (dark gold) */
   --cell-glow: none; /* optional glow (only the Neon theme uses it) */
+  --error-text: #b42318; /* error messages (dark red) */
 }
 
 /* ===== Ocean Arena: light aqua background with blue accents ===== */
@@ -63,6 +64,7 @@
   --win-bg: #b2f0e6;
   --win-border: #26a69a;
   --draw-color: #00838f;
+  --error-text: #b42318;
 }
 
 /* ===== Neon Arena: dark blue-purple with glowing marks ===== */
@@ -87,6 +89,7 @@
   --win-bg: #1d4a3a;
   --win-border: #3ddc97;
   --draw-color: #ffd166;
+  --error-text: #ff8fab;
   --cell-glow: 0 0 12px rgba(124, 77, 255, 0.35);
 }
 
@@ -133,6 +136,11 @@ body {
 /* Only one screen shows at a time; ".hidden" removes it from view. */
 .hidden {
   display: none;
+}
+
+/* The hidden attribute always wins, even over display: grid / flex. */
+[hidden] {
+  display: none !important;
 }
 
 /* Visually hidden, but still read by screen readers (used for the live
@@ -598,6 +606,185 @@ button:focus-visible {
   font-size: 1rem;
 }
 
+/* A button that is busy (e.g. "Creating game…") can't be pressed again. */
+.btn:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.btn:disabled:active {
+  transform: none;
+}
+
+/* --- Online: join form --- */
+
+.join-form {
+  margin-top: 1.5rem;
+  text-align: left;
+}
+
+.join-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.join-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.6rem;
+}
+
+/* Big, spaced, capital letters so a 6-character code is easy to read and
+   type. The font size stays at least 16px so phones don't zoom in. */
+.room-code-input {
+  min-width: 0;
+  min-height: 48px;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid var(--cell-border);
+  border-radius: 12px;
+  background: var(--card-bg);
+  color: var(--text);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.room-code-input::placeholder {
+  color: var(--muted);
+  opacity: 0.55;
+  letter-spacing: 0.18em;
+}
+
+.room-code-input:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.room-code-input[aria-invalid="true"] {
+  border-color: var(--error-text);
+}
+
+/* Errors / progress under the Create and Join controls. Reserves a line so
+   the screen doesn't jump when a message appears. */
+.form-message {
+  min-height: 1.4em;
+  margin: 0.6rem 0 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.form-message.is-error {
+  color: var(--error-text);
+  font-weight: 600;
+}
+
+/* --- Online: lobby --- */
+
+.lobby-status {
+  margin: 0.5rem 0 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.room-code-box {
+  margin: 1rem auto 0;
+  padding: 0.75rem 1rem;
+  background: var(--cell-bg);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.room-code-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.room-code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  font-size: clamp(1.9rem, 10vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  /* letter-spacing adds space after the last letter too; this re-centres it */
+  padding-left: 0.22em;
+  color: var(--text);
+}
+
+.lobby-invite {
+  margin-top: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* The full invite link, selectable in case copying is not possible. */
+.invite-link {
+  width: 100%;
+  min-height: 40px;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--cell-border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+  text-overflow: ellipsis;
+}
+
+.invite-link:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.lobby-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.6rem;
+}
+
+/* With Share available, Copy and Share sit side by side (Copy gets the
+   wider part so its label stays on one line on small phones). */
+.lobby-actions:has(#share-invite:not([hidden])) {
+  grid-template-columns: 2fr 1fr;
+}
+
+.lobby-note {
+  min-height: 1.4em;
+  margin: 0.8rem 0 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.lobby-controls {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.leave-confirm {
+  padding: 0.75rem;
+  background: var(--cell-bg);
+  border-radius: 12px;
+}
+
+.leave-confirm-text {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
 /* --- Hover effects only on devices with a real mouse/trackpad, so they
    don't get "stuck" after a tap on a touchscreen. --- */
 @media (hover: hover) {
@@ -607,6 +794,14 @@ button:focus-visible {
 
   .btn-secondary:hover {
     background: var(--btn-secondary-hover);
+  }
+
+  .btn:disabled:hover {
+    background: var(--btn);
+  }
+
+  .btn-secondary:disabled:hover {
+    background: var(--btn-secondary);
   }
 
   .arena-btn:hover {
@@ -705,6 +900,13 @@ button:focus-visible {
   }
   .arena-picker {
     margin-top: 1.25rem;
+  }
+  .room-code-box {
+    margin-top: 0.75rem;
+    padding: 0.55rem 1rem;
+  }
+  .join-form {
+    margin-top: 1.1rem;
   }
 }
 

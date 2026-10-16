@@ -223,6 +223,39 @@ const TicTacToeOnline = ((Game) => {
     return isValidRoomCode(code) ? code : null;
   }
 
+  // Look at the page address for an invite. Returns:
+  //   { status: "none" }                   no ?room= at all
+  //   { status: "valid", code: "K7M2QX" }  a usable invite
+  //   { status: "invalid" }                ?room= is there but is not a code
+  // (Kept separate from getRoomCodeFromUrl so a broken link can be explained
+  // to the player instead of silently ignored.)
+  function getInviteFromUrl(urlLike) {
+    let url;
+    try {
+      url = new URL(String(urlLike));
+    } catch (error) {
+      return { status: "none" };
+    }
+    if (!url.searchParams.has("room")) {
+      return { status: "none" };
+    }
+    const code = normalizeRoomCode(url.searchParams.get("room"));
+    return isValidRoomCode(code) ? { status: "valid", code } : { status: "invalid" };
+  }
+
+  // The same address without ?room= (used when leaving a room, so a refresh
+  // does not try to rejoin it). Other parameters and the path are kept.
+  function removeRoomFromUrl(urlLike) {
+    let url;
+    try {
+      url = new URL(String(urlLike));
+    } catch (error) {
+      return null;
+    }
+    url.searchParams.delete("room");
+    return url.toString();
+  }
+
   // --- Server errors ----------------------------------------------------------
 
   // The database functions report problems with these short codes. They
@@ -265,6 +298,116 @@ const TicTacToeOnline = ((Game) => {
     return { known: false, code: "UNKNOWN", message: message || String(error) };
   }
 
+  // --- Friendly messages ------------------------------------------------------
+
+  // What the player reads. No technical words (no codes, no product names).
+  const MESSAGES = Object.freeze({
+    ROOM_FULL: "This game already has two players.",
+    ROOM_NOT_FOUND: "Game not found. Check the code and try again.",
+    ROOM_EXPIRED: "This game has expired. Ask your friend to create a new one.",
+    ROOM_CLOSED: "This game has been closed.",
+    INVALID_ROOM_CODE: "Enter a valid 6-character room code.",
+    ROOM_CODE_UNAVAILABLE: "Couldn't create a room. Try again.",
+    INVALID_INVITE: "That invite link isn't valid.",
+    CONNECTION: "Couldn't connect to online play. Try again.",
+    UNAVAILABLE: "Online play is unavailable right now. Try again.",
+    TOO_MANY_ATTEMPTS: "Too many attempts right now. Wait a minute and try again.",
+    GENERIC: "Something went wrong. Please try again.",
+  });
+
+  // Signs that the problem is the connection rather than the game: the online
+  // library could not load, the network failed, or the service is down.
+  function looksUnavailable(error) {
+    if (!error) {
+      return false;
+    }
+    const message = typeof error === "string" ? error : String(error.message || "");
+    const status = typeof error === "object" ? error.status : undefined;
+    return (
+      message === "SUPABASE_LIBRARY_UNAVAILABLE" ||
+      /failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(message) ||
+      (typeof error === "object" && error.name === "AuthRetryableFetchError") ||
+      status === 0 ||
+      (Number.isInteger(status) && status >= 500)
+    );
+  }
+
+  // Turn any error from the online code into { code, message } for the player.
+  // code is our own short name (ROOM_FULL, UNAVAILABLE, ...); message is safe
+  // to show as-is.
+  function friendlyErrorMessage(error) {
+    const normalized = normalizeBackendError(error);
+    if (normalized && normalized.known) {
+      if (normalized.code === "NOT_AUTHENTICATED") {
+        return { code: "CONNECTION", message: MESSAGES.CONNECTION };
+      }
+      if (MESSAGES[normalized.code]) {
+        return { code: normalized.code, message: MESSAGES[normalized.code] };
+      }
+      return { code: "GENERIC", message: MESSAGES.GENERIC };
+    }
+    if (looksUnavailable(error)) {
+      return { code: "UNAVAILABLE", message: MESSAGES.UNAVAILABLE };
+    }
+    if (error && typeof error === "object" && error.status === 429) {
+      return { code: "TOO_MANY_ATTEMPTS", message: MESSAGES.TOO_MANY_ATTEMPTS };
+    }
+    return { code: "GENERIC", message: MESSAGES.GENERIC };
+  }
+
+  // --- The online lobby ---------------------------------------------------------
+
+  // What the lobby screen shows for a room, seen from one player's side.
+  // state is deriveOnlineState(row, me), or null while we are still joining.
+  // Returns { phase, status, note, badge, showCode, showInvite, leaveLabel,
+  // confirmLeave }:
+  //   phase       "joining" | "waiting" | "ready" | "closed"
+  //   showInvite  show the invite link / copy / share controls
+  //   leaveLabel  text of the button that leaves the lobby
+  //   confirmLeave ask "are you sure?" first (leaving closes the room for
+  //               the friend too)
+  function getLobbyView(state) {
+    if (!state) {
+      return {
+        phase: "joining", status: "Joining game…", note: "", badge: null,
+        showCode: true, showInvite: false, leaveLabel: "Cancel", confirmLeave: false,
+      };
+    }
+    if (state.status === "closed" || !state.amPlayer) {
+      let status = MESSAGES.ROOM_CLOSED;
+      if (state.leftBy === "opponent") {
+        status = "Your friend left the game.";
+      } else if (state.leftBy === "me") {
+        status = "You left this game.";
+      }
+      return {
+        phase: "closed", status, note: "", badge: null,
+        showCode: false, showInvite: false, leaveLabel: "Back", confirmLeave: false,
+      };
+    }
+    const badge = state.myMark ? `You are ${state.myMark}` : null;
+    if (state.status === "waiting") {
+      return {
+        phase: "waiting", status: "Waiting for opponent…",
+        note: "Send the invite link or room code to a friend.", badge,
+        showCode: true, showInvite: true, leaveLabel: "Cancel", confirmLeave: false,
+      };
+    }
+    // Both players are in the room ("playing" or "finished").
+    const who = state.amHost ? "Your friend joined." : "You joined your friend's game.";
+    const first = state.myMark === "X" ? `You are X and go first.` : `You are O. Your friend goes first.`;
+    return {
+      phase: "ready", status: "Match ready", note: `${who} ${first}`, badge,
+      showCode: true, showInvite: false, leaveLabel: "Leave Match", confirmLeave: true,
+    };
+  }
+
+  // A room code spelled out for screen readers ("K7M2QX" -> "K 7 M 2 Q X"),
+  // so it is read letter by letter instead of as a word.
+  function spellRoomCode(code) {
+    return typeof code === "string" ? code.split("").join(" ") : "";
+  }
+
   return {
     ROOM_CODE_ALPHABET,
     ROOM_CODE_LENGTH,
@@ -279,7 +422,13 @@ const TicTacToeOnline = ((Game) => {
     shouldAcceptVersion,
     buildInviteUrl,
     getRoomCodeFromUrl,
+    getInviteFromUrl,
+    removeRoomFromUrl,
     normalizeBackendError,
+    MESSAGES,
+    friendlyErrorMessage,
+    getLobbyView,
+    spellRoomCode,
   };
 })(typeof module !== "undefined" && module.exports ? require("./game.js") : TicTacToeGame);
 

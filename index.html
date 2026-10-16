@@ -13,6 +13,7 @@
                  online play: public Supabase settings, pure helpers, and
                  the (lazy) connection
   - script.js    the page: screens, themes, clicks, scoreboard
+  - src/online-ui.js  the online lobby: create, invite, join
 -->
 <html lang="en">
   <head>
@@ -21,7 +22,7 @@
     <title>Tic Tac Toe AI Arena</title>
     <!-- The "?v=" forces the browser to reload the latest CSS instead of
          showing an old cached copy. Bump the number after future edits. -->
-    <link rel="stylesheet" href="styles.css?v=13" />
+    <link rel="stylesheet" href="styles.css?v=14" />
   </head>
   <body>
     <!-- The card sits in the middle of the page and holds every screen. -->
@@ -49,8 +50,8 @@
         <div class="button-group">
           <!-- data-target tells script.js which screen to show on click.
                data-mode tells it which kind of game to start on the board. -->
-          <button class="btn" data-target="player-screen" data-mode="player">Play vs Player</button>
           <button class="btn" data-target="computer-screen">Play vs Computer</button>
+          <button class="btn" data-target="friend-screen">Play with a Friend</button>
           <button class="btn btn-secondary" data-target="how-screen">How to Play</button>
         </div>
 
@@ -150,6 +151,105 @@
         </div>
       </section>
 
+      <!-- ===== Play with a Friend: online or on this device ===== -->
+      <section id="friend-screen" class="screen hidden">
+        <h2 class="title" tabindex="-1">Play with a Friend</h2>
+        <p class="subtitle">Invite a friend online, or take turns on this device.</p>
+
+        <div class="button-group">
+          <div class="option">
+            <button class="btn" data-target="online-screen">Online</button>
+            <p class="option-desc">Send a link or room code to a friend.</p>
+          </div>
+          <div class="option">
+            <!-- The existing two-player game, unchanged. -->
+            <button class="btn" data-target="player-screen" data-mode="player">Same Device</button>
+            <p class="option-desc">Take turns on this screen.</p>
+          </div>
+          <button class="btn btn-secondary" data-target="start-screen">Back</button>
+        </div>
+      </section>
+
+      <!-- ===== Online: create a game or join one with a code =====
+           Opening this screen does not connect to anything; only Create
+           Game, Join Game or an invite link does (see src/online-ui.js). -->
+      <section id="online-screen" class="screen hidden">
+        <h2 class="title" tabindex="-1">Online</h2>
+        <p class="subtitle">Create a game, then send the invite to a friend.</p>
+
+        <div class="button-group">
+          <button id="create-game" class="btn">Create Game</button>
+        </div>
+
+        <!-- A form, so pressing Enter in the box joins. -->
+        <form id="join-form" class="join-form" novalidate>
+          <label for="room-code-input" class="join-label">Have a code?</label>
+          <div class="join-row">
+            <input
+              id="room-code-input"
+              class="room-code-input"
+              type="text"
+              inputmode="text"
+              autocomplete="off"
+              autocapitalize="characters"
+              autocorrect="off"
+              spellcheck="false"
+              maxlength="12"
+              placeholder="ABC123"
+              aria-describedby="online-message"
+            />
+            <button id="join-game" type="submit" class="btn">Join Game</button>
+          </div>
+        </form>
+
+        <!-- Errors and progress for Create / Join (announced by script). -->
+        <p id="online-message" class="form-message"></p>
+
+        <div class="button-group">
+          <button class="btn btn-secondary" data-target="friend-screen">Back</button>
+        </div>
+      </section>
+
+      <!-- ===== Online lobby: room code, invite, waiting, match ready ===== -->
+      <section id="lobby-screen" class="screen hidden">
+        <h2 class="title" tabindex="-1">Online Match</h2>
+        <span id="lobby-badge" class="badge" hidden></span>
+
+        <p id="lobby-status" class="lobby-status">Joining game…</p>
+
+        <div id="lobby-code-box" class="room-code-box">
+          <span class="room-code-label">Room code</span>
+          <!-- Shown big for the eye; spelled out letter by letter for
+               screen readers. -->
+          <span id="lobby-code" class="room-code" aria-hidden="true"></span>
+          <span id="lobby-code-spoken" class="sr-only"></span>
+        </div>
+
+        <div id="lobby-invite" class="lobby-invite" hidden>
+          <label for="invite-link" class="sr-only">Invite link</label>
+          <input id="invite-link" class="invite-link" type="text" readonly />
+          <div class="lobby-actions">
+            <button id="copy-invite" class="btn">Copy Invite Link</button>
+            <!-- Only shown on devices that support native sharing. -->
+            <button id="share-invite" class="btn btn-secondary" hidden>Share</button>
+          </div>
+        </div>
+
+        <p id="lobby-note" class="lobby-note"></p>
+
+        <div class="lobby-controls">
+          <button id="lobby-leave" class="btn btn-secondary">Cancel</button>
+          <!-- Leaving a match with two players closes it for both, so ask first. -->
+          <div id="leave-confirm" class="leave-confirm" hidden>
+            <p id="leave-confirm-text" class="leave-confirm-text">Leave this match? Your friend will be disconnected.</p>
+            <div class="secondary-actions">
+              <button id="leave-yes" class="btn">Leave</button>
+              <button id="leave-no" class="btn btn-secondary">Stay</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- ===== How to Play (hidden until clicked) ===== -->
       <section id="how-screen" class="screen hidden">
         <h2 class="title" tabindex="-1">How to Play</h2>
@@ -159,7 +259,10 @@
         </p>
 
         <ul class="how-list">
-          <li><strong>Play vs Player:</strong> two people take turns on the same device.</li>
+          <li>
+            <strong>Play with a Friend:</strong> invite a friend online with a link or room
+            code, or take turns on the same device.
+          </li>
           <li>
             <strong>Play vs Computer:</strong> you are X and go first. Choose a difficulty:
             <ul>
@@ -185,15 +288,17 @@
 
     <!-- "defer" makes the scripts run after the page has loaded, in this
          order: the game rules, then the AI (which uses them), then the
-         online-play helpers, then the page script (which uses them).
-         The online files only define helpers: nothing connects to the
-         online service until online play is started.
+         online-play helpers, then the page script (which uses them), then
+         the online lobby (which uses the page script).
+         Nothing connects to the online service until online play is
+         actually started (Create Game, Join Game, or an invite link).
          The "?v=" works like the CSS one: it forces a fresh copy. -->
     <script src="src/game.js?v=1" defer></script>
     <script src="src/ai.js?v=1" defer></script>
     <script src="src/online-config.js?v=1" defer></script>
-    <script src="src/online.js?v=1" defer></script>
+    <script src="src/online.js?v=2" defer></script>
     <script src="src/online-client.js?v=1" defer></script>
-    <script src="script.js?v=14" defer></script>
+    <script src="script.js?v=15" defer></script>
+    <script src="src/online-ui.js?v=1" defer></script>
   </body>
 </html>
