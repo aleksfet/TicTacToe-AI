@@ -1,15 +1,18 @@
 # Online multiplayer backend: test plan
 
-Tests for `supabase/migrations/20261016120000_online_multiplayer.sql`.
+Tests for `supabase/migrations/20261016120000_online_multiplayer.sql` and
+`supabase/migrations/20261016180000_scheduled_cleanup.sql`.
 
-> **Status: written, not yet run.** No PostgreSQL / Supabase environment was
-> available when these were written. Nothing here has passed yet.
+> **Status:** both `.test.sql` files pass in PGlite (Postgres compiled to
+> WebAssembly) with a small stand-in for the pgTAP functions they use. They
+> have not yet been run under real pgTAP (`supabase test db`).
 
 ## What is here
 
 | File | What it checks | How it runs |
 |---|---|---|
 | `database/online_games.test.sql` | Everything that can be tested in one database session: constraints, privileges, RLS, all five RPCs, win/draw/scoring, rematch, expiry, leaving, clean-up | pgTAP (`supabase test db`) |
+| `database/cleanup.test.sql` | The hourly clean-up: only rooms idle for more than 24 hours are deleted, auth users are untouched, browser roles cannot run it, a second run deletes nothing, exactly one cron job (where pg_cron exists) | pgTAP (`supabase test db`) |
 | `winner_parity/generate.js` | Generates a pgTAP test proving SQL `private.ttt_winner` agrees with `getWinner` in `src/game.js` on all 3^9 = 19,683 boards | Generate, then pgTAP |
 | This file, "Concurrency" section | The two race conditions, which need two database sessions at once | Two `psql` sessions now; an automated two-client test in a later phase |
 
@@ -56,7 +59,9 @@ nothing behind. They insert four fixed test users into `auth.users`.
 | leave closes the room; first leaver is kept; players can still read it | section 13 |
 | rooms idle > 24 h cleaned up by `create_game` | section 14 |
 | table added to the `supabase_realtime` publication | section 15 |
-| SQL rules = JS rules on all 19,683 boards | `winner_parity/generate.js` |
+| hourly pg_cron clean-up of rooms idle > 24 h (and nothing else) | `cleanup.test.sql` |
+| SQL rules = JS rules on all 19,683 boards | `database/cleanup.test.sql` | The hourly clean-up: only rooms idle for more than 24 hours are deleted, auth users are untouched, browser roles cannot run it, a second run deletes nothing, exactly one cron job (where pg_cron exists) | pgTAP (`supabase test db`) |
+| `winner_parity/generate.js` |
 
 ## Concurrency (two sessions)
 
