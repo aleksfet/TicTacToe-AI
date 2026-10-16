@@ -10,6 +10,8 @@
   - rem / px are size units. 1rem is the page's base font size.
   - The ":root" block holds reusable values (CSS variables) so colors
     only need to be changed in one place.
+  - Text colors are chosen to meet WCAG contrast targets (4.5:1 for normal
+    text, 3:1 for large text such as the X / O marks and the result line).
 */
 
 /* The default values here are the "Classic Arena" theme. The other themes
@@ -21,18 +23,21 @@
   --card-bg: #ffffff; /* white card */
   --card-shadow: rgba(31, 41, 51, 0.12); /* soft card shadow */
   --text: #1f2933; /* near-black text */
-  --muted: #62707f; /* softer gray for the subtitle */
-  --btn: #4f6df5; /* main button blue */
+  --muted: #5e6b7a; /* softer gray for the subtitle */
+  --btn: #4664ee; /* main button blue */
   --btn-hover: #3b58e0; /* darker blue when hovered */
   --btn-secondary: #e2e8f0; /* light gray secondary button */
   --btn-secondary-hover: #cbd5e1; /* slightly darker on hover */
+  --accent-text: #3b58e0; /* accent-colored text, e.g. the selected arena */
+  --focus-ring: #2f49c7; /* keyboard focus outline */
   --cell-bg: #eef1f7; /* board cell / scoreboard background */
   --cell-hover: #e2e7f2; /* cell background on hover */
   --cell-border: #cbd5e1; /* cell border */
   --x-color: #4f6df5; /* the X mark (and X score / X win text) */
   --o-color: #e0567a; /* the O mark (and O score / O win text) */
   --win-bg: #c8f7d4; /* highlight behind a winning line */
-  --draw-color: #c79a2e; /* "It's a draw!" text color */
+  --win-border: #3fbf6f; /* border around the winning cells */
+  --draw-color: #9a7012; /* "It's a draw!" text color (dark gold) */
   --cell-glow: none; /* optional glow (only the Neon theme uses it) */
 }
 
@@ -43,17 +48,20 @@
   --card-bg: #ffffff;
   --card-shadow: rgba(2, 119, 189, 0.22);
   --text: #0b3954; /* deep navy text */
-  --muted: #4a7a96;
-  --btn: #0288d1; /* ocean blue */
-  --btn-hover: #0277bd;
+  --muted: #41708c;
+  --btn: #0277bd; /* ocean blue */
+  --btn-hover: #016aa8;
   --btn-secondary: #d4ecf7;
   --btn-secondary-hover: #bfe2f2;
+  --accent-text: #01579b;
+  --focus-ring: #01579b;
   --cell-bg: #eaf6fc;
   --cell-hover: #d8eef9;
   --cell-border: #8fcdec;
   --x-color: #0277bd; /* blue */
   --o-color: #00897b; /* teal */
   --win-bg: #b2f0e6;
+  --win-border: #26a69a;
   --draw-color: #00838f;
 }
 
@@ -66,15 +74,18 @@
   --text: #f1ecff;
   --muted: #a99fd0;
   --btn: #7c4dff;
-  --btn-hover: #9670ff;
+  --btn-hover: #6a3ff0;
   --btn-secondary: #2c2358;
   --btn-secondary-hover: #3a2f70;
+  --accent-text: #b39dff;
+  --focus-ring: #4fe3ff;
   --cell-bg: #2a2158;
   --cell-hover: #352a70;
   --cell-border: #5a4aa8;
   --x-color: #4fe3ff; /* cyan */
   --o-color: #ff5fa2; /* magenta-pink */
-  --win-bg: #2f6b54;
+  --win-bg: #1d4a3a;
+  --win-border: #3ddc97;
   --draw-color: #ffd166;
   --cell-glow: 0 0 12px rgba(124, 77, 255, 0.35);
 }
@@ -86,7 +97,8 @@
 
 body {
   margin: 0;
-  min-height: 100vh; /* fill the whole window height */
+  min-height: 100vh; /* fill the whole window height... */
+  min-height: 100dvh; /* ...using the visible height on phones (browser bars) */
   display: flex; /* center the card... */
   align-items: center; /* ...vertically... */
   justify-content: center; /* ...and horizontally */
@@ -123,10 +135,31 @@ body {
   display: none;
 }
 
+/* Visually hidden, but still read by screen readers (used for the live
+   announcements of turns, computer moves and results). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .title {
   margin: 0 0 0.5rem;
   font-size: 2rem;
   font-weight: 700;
+}
+
+/* Screen headings receive focus when a screen opens (so keyboard and screen
+   reader users land somewhere sensible). They are not buttons, so they do
+   not need a visible focus outline. */
+.title:focus {
+  outline: none;
 }
 
 .subtitle {
@@ -136,20 +169,26 @@ body {
 }
 
 /* The turn line ("Your turn", "Player X's turn") - a bit bigger and clearer
-   than a plain subtitle so it is easy to read during play. */
+   than a plain subtitle so it is easy to read during play. It always keeps
+   enough room for the bigger result text, so the board does not jump down
+   when the game ends. */
 #status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  line-height: 1.2;
   color: var(--text);
   font-size: 1.25rem;
   font-weight: 600;
-  min-height: 1.5em; /* reserve space so the layout doesn't jump */
 }
 
 /* When the game ends, #status also gets the "result" class to make the
-   outcome big and bold - it should feel like a real game result. */
+   outcome big and bold - it should feel like a real game result.
+   clamp() keeps it on one line on narrow phones. */
 #status.result {
-  font-size: 2rem;
+  font-size: clamp(1.5rem, 7vw, 2rem);
   font-weight: 800;
-  margin-top: 0.4rem;
 }
 
 /* Result colors follow the theme: X color, O color, and a neutral draw color. */
@@ -190,8 +229,23 @@ body {
   margin-top: 1.75rem;
 }
 
+/* Shared button behavior: no double-tap zoom on phones, and our own tap
+   feedback instead of the browser's gray flash. */
+button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* A clear keyboard focus outline on every button, in the theme's color.
+   :focus-visible means it only shows for keyboard users, not mouse clicks. */
+button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
 /* Shared button look. */
 .btn {
+  min-height: 44px; /* comfortable touch target */
   border: none;
   border-radius: 12px;
   padding: 0.85rem 1rem;
@@ -205,11 +259,7 @@ body {
     transform 0.05s ease;
 }
 
-.btn:hover {
-  background: var(--btn-hover);
-}
-
-/* A tiny press-down effect when the button is clicked. */
+/* A tiny press-down effect when the button is clicked or tapped. */
 .btn:active {
   transform: scale(0.98);
 }
@@ -218,11 +268,12 @@ body {
 .btn-secondary {
   color: var(--text);
   background: var(--btn-secondary);
-  margin-top: 1.25rem;
 }
 
-.btn-secondary:hover {
-  background: var(--btn-secondary-hover);
+/* In the menus, a secondary button after the main choices gets a little
+   extra space to separate it from them. */
+.button-group > .btn-secondary:not(:first-child) {
+  margin-top: 1.25rem;
 }
 
 /* A difficulty option: the button with its short description tucked under it. */
@@ -259,6 +310,7 @@ body {
 
 .arena-btn {
   flex: 1;
+  min-height: 44px; /* comfortable touch target */
   appearance: none;
   -webkit-appearance: none;
   border: 2px solid var(--cell-border);
@@ -275,14 +327,14 @@ body {
     color 0.15s ease;
 }
 
-.arena-btn:hover {
+.arena-btn:active {
   background: var(--cell-hover);
 }
 
 /* The currently selected arena gets a colored outline. */
 .arena-btn.active {
   border-color: var(--btn);
-  color: var(--btn);
+  color: var(--accent-text);
 }
 
 /* --- Start screen polish --- */
@@ -332,8 +384,34 @@ body {
   box-shadow: 0 4px 12px var(--card-shadow);
 }
 
-#start-screen .button-group .btn:hover {
-  transform: translateY(-1px);
+/* --- How to Play --- */
+
+/* A short left-aligned list on a soft tinted panel. */
+.how-list {
+  margin: 1.25rem 0 0;
+  padding: 1rem 1.1rem;
+  list-style: none;
+  text-align: left;
+  background: var(--cell-bg);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.how-list ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  color: var(--muted);
+}
+
+.how-list strong {
+  color: var(--text);
 }
 
 /* --- The scoreboard (three little stat boxes above the board) --- */
@@ -341,7 +419,7 @@ body {
   display: flex;
   justify-content: center;
   gap: 0.6rem;
-  margin: 0.75rem auto 0;
+  margin: 0.5rem auto 0;
 }
 
 .score-item {
@@ -379,18 +457,24 @@ body {
 
 /* --- The game board --- */
 
-/* A 3x3 square board, about 360px on desktop. "width: min(360px, 100%)" keeps
-   it 360px normally but lets it shrink on narrow screens; "aspect-ratio: 1"
-   keeps it square; defining BOTH rows and columns (so they each fill 1/3 of
-   the height) is what stops the cells collapsing to the size of the text. */
+/* A 3x3 square board, at most 360px. Its width is the smallest of:
+     - 360px (the normal desktop size),
+     - 100% (the card's width, so it fits narrow phones),
+     - the screen height minus everything else on the game screen
+       (--board-chrome), so on short screens the whole game still fits.
+   It never goes below 220px. "aspect-ratio: 1" keeps it square; defining
+   BOTH rows and columns (so they each fill 1/3 of the height) is what stops
+   the cells collapsing to the size of the text. */
 .board {
+  --board-chrome: 488px;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
   gap: 8px;
-  width: min(360px, 100%);
+  width: min(360px, 100%, max(220px, 100vh - var(--board-chrome)));
+  width: min(360px, 100%, max(220px, 100dvh - var(--board-chrome)));
   aspect-ratio: 1;
-  margin: 1.5rem auto 0;
+  margin: 1rem auto 0;
 }
 
 /* Each clickable square.
@@ -418,14 +502,19 @@ body {
   transition: background 0.15s ease;
 }
 
-/* Only EMPTY cells highlight on hover (filled cells stay put). */
-.cell:not(.taken):hover {
-  background: var(--cell-hover);
-  border-color: var(--btn);
+.cell:focus-visible {
+  outline-offset: 2px;
 }
 
-/* Once a cell is filled it should not look clickable any more. */
-.cell.taken {
+/* Tap / press feedback on a cell that can actually be played. */
+.board:not(.locked) .cell:not(.taken):active {
+  background: var(--cell-hover);
+}
+
+/* A filled cell, or any cell while the computer is thinking or the game is
+   over, should not look clickable. */
+.cell.taken,
+.board.locked .cell {
   cursor: default;
 }
 
@@ -460,14 +549,11 @@ body {
 }
 
 /* The three cells of a winning line get highlighted and gently glow.
-   The glow color is the theme's win color, so it works in every arena. */
+   The colors come from the theme, so it works in every arena. */
 .cell.win {
   background: var(--win-bg);
+  border-color: var(--win-border);
   animation: win-pulse 1s ease-in-out infinite;
-}
-
-.cell.win:hover {
-  background: var(--win-bg);
 }
 
 @keyframes win-pulse {
@@ -481,18 +567,69 @@ body {
 }
 
 /* The small note that explains the computer's last move. Subtle so it does
-   not distract; min-height reserves space so the layout doesn't jump. */
+   not distract; it always reserves two lines so a longer note does not push
+   the buttons down. (It is hidden in Play vs Player.) */
 #ai-explanation {
-  margin: 0.75rem auto 0;
+  margin: 0.5rem auto 0;
   font-size: 0.85rem;
   font-style: italic;
+  line-height: 1.35;
   color: var(--muted);
-  min-height: 1.1em;
+  min-height: 2.7em;
 }
 
-/* --- Responsive: the board shrinks on its own (width: min(360px, 100%)),
-   so here we just ease down the text sizes on very narrow phones. --- */
+/* --- Game controls: Restart on its own row, then the two secondary
+   actions side by side. --- */
+.game-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.secondary-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.secondary-actions .btn {
+  padding: 0.7rem 0.5rem;
+  font-size: 1rem;
+}
+
+/* --- Hover effects only on devices with a real mouse/trackpad, so they
+   don't get "stuck" after a tap on a touchscreen. --- */
+@media (hover: hover) {
+  .btn:hover {
+    background: var(--btn-hover);
+  }
+
+  .btn-secondary:hover {
+    background: var(--btn-secondary-hover);
+  }
+
+  .arena-btn:hover {
+    background: var(--cell-hover);
+  }
+
+  #start-screen .button-group .btn:hover {
+    transform: translateY(-1px);
+  }
+
+  /* Only EMPTY cells that can be played right now highlight on hover. */
+  .board:not(.locked) .cell:not(.taken):hover {
+    background: var(--cell-hover);
+    border-color: var(--btn);
+  }
+}
+
+/* --- Responsive: the board shrinks on its own (see .board), so here we
+   ease down the text sizes and spacing on narrow phones. --- */
 @media (max-width: 400px) {
+  body {
+    padding: 0.75rem;
+  }
   .card {
     padding: 2rem 1.25rem;
   }
@@ -504,5 +641,85 @@ body {
   }
   .cell {
     font-size: 2.6rem;
+  }
+  .board {
+    --board-chrome: 420px;
+  }
+}
+
+/* --- Short screens (most phones, small laptop windows): tighten the
+   vertical spacing so the whole game fits without scrolling. --- */
+@media (max-height: 760px) {
+  body {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  .card {
+    padding-top: 1.25rem;
+    padding-bottom: 1.25rem;
+  }
+  #player-screen .title {
+    font-size: 1.45rem;
+    margin-bottom: 0.15rem;
+  }
+  #status {
+    min-height: 2.1rem;
+  }
+  #status.result {
+    font-size: clamp(1.4rem, 6.5vw, 1.75rem);
+  }
+  .score-item {
+    padding: 0.3rem 0.4rem;
+    gap: 0;
+  }
+  .score-label {
+    font-size: 0.7rem;
+  }
+  .score-value {
+    font-size: 1.15rem;
+  }
+  .board {
+    --board-chrome: 372px;
+    margin-top: 0.6rem;
+  }
+  #ai-explanation {
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+  }
+  .game-controls {
+    margin-top: 0.6rem;
+    gap: 0.5rem;
+  }
+  .secondary-actions {
+    gap: 0.5rem;
+  }
+  .game-controls .btn {
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
+  }
+  .mini-board {
+    margin-top: 0.9rem;
+  }
+  .button-group {
+    margin-top: 1.25rem;
+  }
+  .arena-picker {
+    margin-top: 1.25rem;
+  }
+}
+
+/* --- Reduced motion: people who ask their device for less movement get
+   no pop-in, no pulsing win glow and no button movement. The winning line
+   is still clearly marked by its color and border. --- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .btn:active,
+  #start-screen .button-group .btn:hover {
+    transform: none;
   }
 }

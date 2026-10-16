@@ -29,10 +29,15 @@
 const screens = document.querySelectorAll(".screen");
 const navButtons = document.querySelectorAll("[data-target]");
 
-// Show one screen by id and hide all the others.
+// Show one screen by id and hide all the others, then move keyboard focus
+// into the new screen (so focus never gets lost on a hidden button).
 function showScreen(screenId) {
   // Cancel any pending computer move so it can't fire on another screen.
   clearTimeout(computerTimer);
+
+  // Remember which screen we are leaving (used to choose where focus goes).
+  const fromScreen = document.querySelector(".screen:not(.hidden)");
+  const fromId = fromScreen ? fromScreen.id : null;
 
   screens.forEach((screen) => {
     screen.classList.add("hidden");
@@ -43,9 +48,42 @@ function showScreen(screenId) {
     target.classList.remove("hidden");
   }
 
-  // Opening the board should always begin a fresh game.
-  if (screenId === "player-screen") {
+  // Opening the board always begins a fresh game. Leaving it also clears it,
+  // so a game abandoned mid-turn doesn't linger on the hidden board.
+  if (screenId === "player-screen" || fromId === "player-screen") {
     resetGame();
+  }
+  if (screenId === "player-screen") {
+    announce("New game. " + statusText.textContent);
+  }
+
+  if (target) {
+    moveFocusInto(target, fromId);
+  }
+}
+
+// Where keyboard focus goes after a screen switch:
+//   - back on the start menu: the button that led away from it, so a keyboard
+//     user picks up where they left off;
+//   - anywhere else: the new screen's heading (it has tabindex="-1" so it can
+//     take focus without becoming a Tab stop).
+function moveFocusInto(screen, fromId) {
+  if (screen.id === "start-screen" && fromId) {
+    let selector = '[data-target="computer-screen"]';
+    if (fromId === "how-screen") {
+      selector = '[data-target="how-screen"]';
+    } else if (fromId === "player-screen" && gameMode === "player") {
+      selector = '[data-mode="player"]';
+    }
+    const button = screen.querySelector(selector);
+    if (button) {
+      button.focus();
+      return;
+    }
+  }
+  const heading = screen.querySelector("h1, h2");
+  if (heading) {
+    heading.focus();
   }
 }
 
@@ -78,9 +116,12 @@ function setTheme(theme) {
   // Swap the theme class on the body...
   document.body.classList.remove(...THEME_CLASSES);
   document.body.classList.add("theme-" + theme);
-  // ...and highlight the matching arena button.
+  // ...and highlight the matching arena button (aria-pressed tells screen
+  // readers which one is selected).
   themeButtons.forEach((button) => {
-    button.classList.toggle("active", button.getAttribute("data-theme") === theme);
+    const selected = button.getAttribute("data-theme") === theme;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-pressed", String(selected));
   });
 }
 
@@ -96,8 +137,10 @@ setTheme("classic");
 // ---------------------------------------------------------------------------
 
 // Grab the parts of the board screen we need to read or update.
+const boardEl = document.getElementById("board");
 const cells = document.querySelectorAll(".cell");
 const statusText = document.getElementById("status");
+const announcer = document.getElementById("announcer");
 const boardTitle = document.getElementById("board-title");
 const difficultyBadge = document.getElementById("difficulty-badge");
 const restartButton = document.getElementById("restart");
@@ -145,6 +188,40 @@ let lockBoard = false;
 // player restarts or leaves before the computer has moved.
 let computerTimer = null;
 
+// --- Accessibility helpers ---
+
+// "Row 2, column 3" for cell index 5.
+function cellPosition(index) {
+  return "Row " + (Math.floor(index / 3) + 1) + ", column " + ((index % 3) + 1);
+}
+
+// Give a cell its screen reader name, e.g. "Row 1, column 2, empty" or
+// "Row 2, column 3, X". The visible cell is unchanged.
+function updateCellLabel(index) {
+  const value = board[index] === "" ? "empty" : board[index];
+  cells[index].setAttribute("aria-label", cellPosition(index) + ", " + value);
+}
+
+// Mark the board as playable or not. While the computer is thinking, or once
+// the game is over, the whole board is "locked": no hover, no pointer cursor,
+// and every cell reports aria-disabled. (aria-disabled, not the disabled
+// attribute, so a focused cell keeps keyboard focus.)
+function updateBoardState() {
+  const locked = lockBoard || gameOver;
+  boardEl.classList.toggle("locked", locked);
+  cells.forEach((cell, index) => {
+    cell.setAttribute("aria-disabled", String(locked || board[index] !== ""));
+  });
+}
+
+// Tell screen reader users what just happened. The #announcer region is
+// visually hidden; a no-break space is toggled on the end so that the same
+// message twice in a row (e.g. two restarts) is still announced.
+function announce(message) {
+  const same = announcer.textContent.replace(/ $/, "") === message;
+  announcer.textContent = same && !announcer.textContent.endsWith(" ") ? message + " " : message;
+}
+
 // Put a mark ("X" or "O") into a cell, both in the data and on the screen.
 function placeMark(index, player) {
   board[index] = player;
@@ -153,6 +230,8 @@ function placeMark(index, player) {
   cell.innerHTML = '<span class="mark">' + player + "</span>";
   cell.classList.add("taken");
   cell.classList.add(player === "X" ? "x" : "o");
+  updateCellLabel(index);
+  updateBoardState();
 }
 
 // Remove the big "result" styling from the status line (used when a new turn
@@ -230,6 +309,7 @@ function checkGameEnd() {
     statusText.classList.add("result", winner === "X" ? "result-x" : "result-o");
     winningLine.forEach((i) => cells[i].classList.add("win"));
     recordResult(winner);
+    updateBoardState();
     return true;
   }
 
@@ -240,6 +320,7 @@ function checkGameEnd() {
     // Big result text in a neutral gold color.
     statusText.classList.add("result", "result-draw");
     recordResult(null);
+    updateBoardState();
     return true;
   }
 
@@ -251,6 +332,7 @@ function computerMove() {
   // Safety check: never move if the game is already over.
   if (gameOver) {
     lockBoard = false;
+    updateBoardState();
     return;
   }
 
@@ -259,8 +341,13 @@ function computerMove() {
   aiExplanation = choice.explanation;
   if (choice.index === null) {
     lockBoard = false;
+    updateBoardState();
     return; // no empty cells left
   }
+
+  // The computer's turn is done, so unlock the board for the human.
+  // (Set before placing the mark so the board state is updated once.)
+  lockBoard = false;
 
   placeMark(choice.index, "O");
 
@@ -268,16 +355,17 @@ function computerMove() {
   // game-over check so it still appears on a game-ending computer move.
   explanationEl.textContent = aiExplanation;
 
-  // The computer's turn is done, so unlock the board for the human.
-  lockBoard = false;
+  const moveSummary = "Computer played " + cellPosition(choice.index) + ". " + aiExplanation;
 
   if (checkGameEnd()) {
+    announce(moveSummary + " " + statusText.textContent);
     return;
   }
 
   // Hand the turn back to the human (X).
   currentPlayer = "X";
   showTurnStatus();
+  announce(moveSummary + " " + statusText.textContent);
 }
 
 // Handle a click on one of the cells.
@@ -296,21 +384,32 @@ function handleCellClick(event) {
     return;
   }
 
+  // Against the computer, lock the board straight away (in this same click)
+  // so a fast second click or key press can't sneak in another move.
+  if (isComputerMode()) {
+    lockBoard = true;
+  }
+
   placeMark(index, currentPlayer);
 
   if (checkGameEnd()) {
+    // The human's move ended the game, so the computer's last explanation
+    // no longer describes what happened: clear it.
+    lockBoard = false;
+    explanationEl.textContent = "";
+    announce(statusText.textContent);
     return;
   }
 
-  // Switch to the other player.
+  // Switch to the other player. In computer modes this also shows
+  // "Computer thinking..." (see showTurnStatus).
   currentPlayer = currentPlayer === "X" ? "O" : "X";
   showTurnStatus();
+  announce(statusText.textContent);
 
   // Against the computer, once it is O's turn, let it move after a short,
-  // slightly random pause (about 400-600ms).
+  // slightly random pause (about 400-600ms). The board stays locked until then.
   if (isComputerMode() && currentPlayer === "O" && !gameOver) {
-    lockBoard = true;
-    statusText.textContent = "Computer thinking...";
     const delay = 400 + Math.floor(Math.random() * 200);
     computerTimer = setTimeout(computerMove, delay);
   }
@@ -326,9 +425,11 @@ function resetGame() {
   gameOver = false;
   lockBoard = false;
 
-  // Clear the AI explanation at the start of each round.
+  // Clear the AI explanation at the start of each round. The note only
+  // exists in computer modes, so it takes up no space in Play vs Player.
   aiExplanation = "";
   explanationEl.textContent = "";
+  explanationEl.hidden = !isComputerMode();
 
   // Match header + difficulty badge both depend on the current mode.
   if (gameMode === "easy") {
@@ -357,21 +458,30 @@ function resetGame() {
   showTurnStatus();
 
   // Wipe the marks and any highlight/color classes off every cell.
-  cells.forEach((cell) => {
+  cells.forEach((cell, index) => {
     cell.textContent = "";
     cell.classList.remove("taken", "x", "o", "win");
+    updateCellLabel(index);
   });
+  updateBoardState();
 }
 
 // Wire up the cell clicks and the buttons.
 cells.forEach((cell) => cell.addEventListener("click", handleCellClick));
 
+// Give the empty cells their labels right away.
+cells.forEach((cell, index) => updateCellLabel(index));
+
 // Restart Game: clear the board only, keeping the scoreboard.
-restartButton.addEventListener("click", resetGame);
+restartButton.addEventListener("click", () => {
+  resetGame();
+  announce("New game. " + statusText.textContent);
+});
 
 // Reset Score: zero the scoreboard AND start a clean board, so the player gets
 // a fresh game with the score back to 0.
 resetScoreButton.addEventListener("click", () => {
   resetScores();
   resetGame();
+  announce("Scores reset. New game. " + statusText.textContent);
 });

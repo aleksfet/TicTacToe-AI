@@ -18,14 +18,14 @@
     <title>Tic Tac Toe AI Arena</title>
     <!-- The "?v=" forces the browser to reload the latest CSS instead of
          showing an old cached copy. Bump the number after future edits. -->
-    <link rel="stylesheet" href="styles.css?v=12" />
+    <link rel="stylesheet" href="styles.css?v=13" />
   </head>
   <body>
     <!-- The card sits in the middle of the page and holds every screen. -->
     <main class="card">
       <!-- ===== Start screen (visible first) ===== -->
       <section id="start-screen" class="screen">
-        <h1 class="title">Tic Tac Toe AI Arena</h1>
+        <h1 class="title" tabindex="-1">Tic Tac Toe AI Arena</h1>
         <p class="subtitle">Choose a mode: play with someone or challenge the computer.</p>
 
         <!-- Decorative mini board (not clickable). It uses mini-* classes on
@@ -52,13 +52,14 @@
         </div>
 
         <!-- Arena (theme) picker. data-theme tells script.js which theme class
-             to put on <body>. The chosen theme stays for the whole session. -->
+             to put on <body>. The chosen theme stays for the whole session.
+             aria-pressed tells screen readers which arena is selected. -->
         <div class="arena-picker">
-          <p class="arena-title">Choose Arena</p>
-          <div class="arena-buttons">
-            <button class="arena-btn" data-theme="classic">Classic</button>
-            <button class="arena-btn" data-theme="ocean">Ocean</button>
-            <button class="arena-btn" data-theme="neon">Neon</button>
+          <p class="arena-title" id="arena-title">Choose Arena</p>
+          <div class="arena-buttons" role="group" aria-labelledby="arena-title">
+            <button class="arena-btn" data-theme="classic" aria-pressed="false">Classic</button>
+            <button class="arena-btn" data-theme="ocean" aria-pressed="false">Ocean</button>
+            <button class="arena-btn" data-theme="neon" aria-pressed="false">Neon</button>
           </div>
         </div>
       </section>
@@ -67,15 +68,16 @@
       <section id="player-screen" class="screen hidden">
         <!-- The match header changes depending on the mode (set by script.js).
              The badge below it only appears in computer modes. -->
-        <h2 id="board-title" class="title">Player vs Player</h2>
+        <h2 id="board-title" class="title" tabindex="-1">Player vs Player</h2>
         <span id="difficulty-badge" class="badge hidden"></span>
 
-        <!-- Status line: whose turn it is, or the result. -->
+        <!-- Status line: whose turn it is, or the result. (Screen readers hear
+             these changes through the #announcer region below instead.) -->
         <p id="status" class="subtitle">Player X's turn</p>
 
         <!-- Scoreboard. The X / O labels become "You" / "Computer" in computer
              modes (script.js sets the label text). Values count session wins. -->
-        <div class="scoreboard">
+        <div class="scoreboard" role="group" aria-label="Scoreboard">
           <div class="score-item">
             <span class="score-label" id="score-label-x">X</span>
             <span class="score-value" id="score-x">0</span>
@@ -91,8 +93,9 @@
         </div>
 
         <!-- The 3x3 board. Each cell is a button so it is easy to click
-             and works with the keyboard too. data-index is 0..8. -->
-        <div id="board" class="board">
+             and works with the keyboard too. data-index is 0..8.
+             script.js gives each cell a label such as "Row 1, column 2, empty". -->
+        <div id="board" class="board" role="group" aria-label="Game board">
           <button class="cell" data-index="0"></button>
           <button class="cell" data-index="1"></button>
           <button class="cell" data-index="2"></button>
@@ -108,18 +111,22 @@
              only). It stays empty in Play vs Player. -->
         <p id="ai-explanation"></p>
 
-        <div class="button-group">
-          <!-- id="restart" and id="reset-score" are handled separately in
-               script.js (not screen switches), so they have no data-target. -->
+        <!-- Restart is the main action; Reset Score and Back to Menu sit
+             side by side underneath it.
+             id="restart" and id="reset-score" are handled separately in
+             script.js (not screen switches), so they have no data-target. -->
+        <div class="game-controls">
           <button id="restart" class="btn">Restart Game</button>
-          <button id="reset-score" class="btn btn-secondary">Reset Score</button>
-          <button class="btn btn-secondary" data-target="start-screen">Back to Menu</button>
+          <div class="secondary-actions">
+            <button id="reset-score" class="btn btn-secondary">Reset Score</button>
+            <button class="btn btn-secondary" data-target="start-screen">Back to Menu</button>
+          </div>
         </div>
       </section>
 
       <!-- ===== Difficulty menu (shown for Play vs Computer) ===== -->
       <section id="computer-screen" class="screen hidden">
-        <h2 class="title">Choose Difficulty</h2>
+        <h2 class="title" tabindex="-1">Choose Difficulty</h2>
         <p class="subtitle">You play as X. The computer plays as O.</p>
 
         <div class="button-group">
@@ -142,11 +149,35 @@
 
       <!-- ===== How to Play (hidden until clicked) ===== -->
       <section id="how-screen" class="screen hidden">
-        <h2 class="title">How to Play</h2>
-        <p class="subtitle">Take turns placing X and O.</p>
-        <p class="subtitle">Get three in a row to win.</p>
-        <button class="btn btn-secondary" data-target="start-screen">Back</button>
+        <h2 class="title" tabindex="-1">How to Play</h2>
+        <p class="subtitle">
+          Take turns placing X and O. Get three in a row (across, down or
+          diagonally) to win.
+        </p>
+
+        <ul class="how-list">
+          <li><strong>Play vs Player:</strong> two people take turns on the same device.</li>
+          <li>
+            <strong>Play vs Computer:</strong> you are X and go first. Choose a difficulty:
+            <ul>
+              <li><strong>Easy</strong> picks random squares.</li>
+              <li><strong>Medium</strong> mixes smart moves with random ones.</li>
+              <li>
+                <strong>Impossible</strong> uses the Minimax algorithm to look ahead at
+                every possible outcome. It never loses, so the best you can do is a draw.
+              </li>
+            </ul>
+          </li>
+        </ul>
+
+        <div class="button-group">
+          <button class="btn btn-secondary" data-target="start-screen">Back</button>
+        </div>
       </section>
+
+      <!-- Screen reader announcements: turns, computer moves and results are
+           written here by script.js. It is visually hidden (.sr-only). -->
+      <p id="announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
     </main>
 
     <!-- "defer" makes the scripts run after the page has loaded, in this
@@ -155,6 +186,6 @@
          The "?v=" works like the CSS one: it forces a fresh copy. -->
     <script src="src/game.js?v=1" defer></script>
     <script src="src/ai.js?v=1" defer></script>
-    <script src="script.js?v=13" defer></script>
+    <script src="script.js?v=14" defer></script>
   </body>
 </html>
