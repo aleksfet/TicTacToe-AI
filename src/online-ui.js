@@ -139,11 +139,36 @@
   // quiet: don't announce (the online board is showing and announces itself).
   function renderLobby({ quiet = false } = {}) {
     const state = room && room.row ? Online.deriveOnlineState(room.row, room.userId) : null;
-    const view = Online.getLobbyView(state);
+    let view = Online.getLobbyView(state);
     const code = (room && room.row && room.row.room_code) || joiningCode || "";
 
+    // The room can no longer be used from this browser: say why, offer Back.
+    if (room && (room.sessionEnded || room.expired)) {
+      view = {
+        ...view,
+        phase: "closed",
+        status: room.sessionEnded ? Online.MESSAGES.SESSION_ENDED : Online.MESSAGES.GAME_EXPIRED,
+        note: room.sessionEnded ? Online.MESSAGES.SESSION_ENDED_HINT : Online.MESSAGES.GAME_EXPIRED_HINT,
+        badge: null,
+        showInvite: false,
+        leaveLabel: "Back",
+        confirmLeave: false,
+        startLabel: undefined,
+      };
+    }
+    // Connection news (reconnecting, friend disconnected, invite probably
+    // expired) replaces the normal note while it applies.
+    const connectionNote = room && room.row && !room.sessionEnded && !room.expired
+      ? Online.lobbyConnectionNote({
+          phase: view.phase,
+          connection: room.connection,
+          opponent: room.opponentBack ? "back" : room.opponent,
+          likelyExpired: Boolean(room.expiryHint),
+        })
+      : null;
+
     lobbyStatus.textContent = view.status;
-    lobbyNote.textContent = view.note;
+    lobbyNote.textContent = connectionNote || view.note;
 
     lobbyBadge.hidden = !view.badge;
     lobbyBadge.textContent = view.badge || "";
@@ -185,8 +210,47 @@
     }
   }
 
+  // --- Connection awareness -----------------------------------------------------
+  //
+  // Presence (who is connected) travels on the room's existing live channel.
+  // It only changes messages and whether the board accepts clicks; the
+  // players, the turn and whether the room is open always come from the
+  // server's row.
+  //
+  // Per room this file keeps:
+  //   connection   "connecting" | "connected" | "reconnecting"  (this browser)
+  //   opponent     "unknown" | "present" | "away" | "disconnected" (the friend)
+  //   opponentBack true for a few seconds after the friend returns
+  //   expired / sessionEnded  the room can no longer be played from here
+
+  const GRACE_MS = 8000; // a friend missing longer than this shows as disconnected
+  const BACK_MS = 4000; // how long "Opponent is back." stays on screen
+  const HEALTH_CHECK_MS = 2000; // how often the live connection is checked
+
+  // The room in which this browser's online identity stopped working, so a
+  // failed rejoin can be explained (see joinGame).
+  let endedRoomCode = null;
+
   function onlineBoardVisible() {
     return gameMode === "online" && !playerScreen.classList.contains("hidden");
+  }
+
+  function boardOptions() {
+    return {
+      pending: movePending,
+      connection: room.connection,
+      opponent: room.opponentBack ? "back" : room.opponent,
+      expired: room.expired,
+      sessionEnded: room.sessionEnded,
+    };
+  }
+
+  // Redraw whatever is showing (lobby and/or online board) without announcing.
+  function renderAll() {
+    renderLobby({ quiet: true });
+    if (onlineBoardVisible()) {
+      renderOnlineBoard();
+    }
   }
 
   // THE one way the screen learns about the room. Called with the server's
@@ -213,26 +277,170 @@
         announce(message);
       }
     }
+    // A guest may just have arrived: check whether they are connected.
+    evaluatePresence(room);
   }
 
   // Read the room from the server again and show it if it is newer. Used
   // when the live connection (re)starts, when the tab becomes visible again,
-  // and after a move the server refused - anything we might have missed.
+  // when the friend comes back, and after a refused move - anything we might
+  // have missed. Returns true if the server answered.
   async function refreshRoom() {
     const thisRoom = room;
     if (!thisRoom || !thisRoom.row) {
+      return false;
+    }
+    let result;
+    try {
+      result = await thisRoom.client.from("online_games").select("*").eq("id", thisRoom.row.id).maybeSingle();
+    } catch (error) {
+      return false;
+    }
+    if (room !== thisRoom) {
+      return false;
+    }
+    if (result.error) {
+      if (Online.isSessionFailure(result.error)) {
+        endSession();
+      }
+      return false;
+    }
+    if (!result.data) {
+      return false;
+    }
+    applyRow(result.data);
+    return true;
+  }
+
+  function setConnection(next) {
+    if (!room || room.connection === next) {
       return;
     }
-    const { data } = await thisRoom.client.from("online_games").select("*").eq("id", thisRoom.row.id).maybeSingle();
-    if (data && room === thisRoom) {
-      applyRow(data);
+    const previous = room.connection;
+    room.connection = next;
+    if (next === "reconnecting") {
+      announce(Online.MESSAGES.RECONNECTING);
+    } else if (next === "connected" && previous === "reconnecting") {
+      boardNotice = "";
+      announce(Online.MESSAGES.CONNECTION_RESTORED);
+    }
+    renderAll();
+  }
+
+  // Is this browser's live connection to the room healthy? If not, show
+  // "Reconnecting…" and lock the board. When it is healthy again, read the
+  // room first and only then unlock (so a stale board is never playable).
+  async function checkConnection() {
+    const thisRoom = room;
+    if (!thisRoom || !thisRoom.channel || thisRoom.sessionEnded) {
+      return;
+    }
+    const healthy =
+      navigator.onLine !== false && thisRoom.channel.state === "joined" && thisRoom.client.realtime.isConnected();
+    if (!healthy) {
+      if (thisRoom.subscribedOnce) {
+        setConnection("reconnecting");
+      }
+      return;
+    }
+    if (thisRoom.connection !== "connected" && !thisRoom.recovering) {
+      thisRoom.recovering = true;
+      const ok = await refreshRoom();
+      thisRoom.recovering = false;
+      if (ok && room === thisRoom) {
+        setConnection("connected");
+      }
+    }
+    // A host waiting alone for a long time: the "probably expired" hint may
+    // need to appear (display only; the server decides).
+    const hint = Boolean(thisRoom.row && !thisRoom.row.guest_id && Online.isLikelyExpired(thisRoom.row));
+    if (room === thisRoom && hint !== thisRoom.expiryHint) {
+      thisRoom.expiryHint = hint;
+      renderLobby({ quiet: true });
     }
   }
 
-  // Listen for changes to this room (the guest arriving, moves, rematches).
-  // Every time the subscription becomes live - the first time and after any
-  // reconnect - read the room again: something may have changed meanwhile
-  // (e.g. the guest joined between creating the room and subscribing).
+  // The online identity stopped working (e.g. it was signed out or expired).
+  // Don't create a new one behind the player's back: the old seat belongs to
+  // the old identity. Explain, and offer the way back.
+  function endSession() {
+    if (!room || room.sessionEnded) {
+      return;
+    }
+    room.sessionEnded = true;
+    endedRoomCode = room.row ? room.row.room_code : null;
+    announce(`${Online.MESSAGES.SESSION_ENDED} ${Online.MESSAGES.SESSION_ENDED_HINT}`);
+    renderAll();
+  }
+
+  function markExpired() {
+    if (!room || room.expired) {
+      return;
+    }
+    room.expired = true;
+    announce(`${Online.MESSAGES.GAME_EXPIRED} ${Online.MESSAGES.GAME_EXPIRED_HINT}`);
+    renderAll();
+  }
+
+  // Look at who is on the room's live channel and update the friend's state
+  // (with the grace period, so a quick refresh never shows "disconnected").
+  function evaluatePresence(thisRoom) {
+    if (!thisRoom || room !== thisRoom || !thisRoom.channel || !thisRoom.row) {
+      return;
+    }
+    const row = thisRoom.row;
+    const opponentId = row.host_id === thisRoom.userId ? row.guest_id : row.host_id;
+    if (row.left_by) {
+      return; // the room is closed: nothing to watch
+    }
+    if (!opponentId) {
+      // A host waiting alone: someone else appearing on the room's channel is
+      // almost certainly the guest who just joined. Read the room, in case
+      // the live "guest joined" update was missed.
+      if (Object.keys(thisRoom.channel.presenceState()).some((key) => key !== thisRoom.userId)) {
+        refreshRoom();
+      }
+      return;
+    }
+    const present = Object.prototype.hasOwnProperty.call(thisRoom.channel.presenceState(), opponentId);
+    const change = Online.presenceTransition(thisRoom.opponent, present);
+    if (change.next === thisRoom.opponent && !change.returned) {
+      return;
+    }
+    thisRoom.opponent = change.next;
+    if (change.cancelGrace) {
+      clearTimeout(thisRoom.graceTimer);
+    }
+    if (change.startGrace) {
+      clearTimeout(thisRoom.graceTimer);
+      thisRoom.graceTimer = setTimeout(() => {
+        if (room !== thisRoom || thisRoom.opponent !== "away" || (thisRoom.row && thisRoom.row.left_by)) {
+          return;
+        }
+        thisRoom.opponent = "disconnected";
+        announce(Online.MESSAGES.OPPONENT_DISCONNECTED);
+        renderAll();
+      }, GRACE_MS);
+    }
+    if (change.returned) {
+      thisRoom.opponentBack = true;
+      clearTimeout(thisRoom.backTimer);
+      thisRoom.backTimer = setTimeout(() => {
+        if (room === thisRoom) {
+          thisRoom.opponentBack = false;
+          renderAll();
+        }
+      }, BACK_MS);
+      announce(Online.MESSAGES.OPPONENT_BACK);
+      refreshRoom(); // they may have moved while we couldn't see it
+    }
+    renderAll();
+  }
+
+  // Listen for changes to this room (the guest arriving, moves, rematches)
+  // and for who is connected (Presence), on one channel. Every time the
+  // channel becomes live - the first time and after any reconnect - announce
+  // ourselves again and read the room again before unlocking.
   async function subscribe(session) {
     const thisRoom = room;
     const id = thisRoom.row.id;
@@ -244,19 +452,39 @@
     if (room !== thisRoom) {
       return;
     }
+    // Presence key = this browser's anonymous player id. Nothing personal.
     const channel = thisRoom.client
-      .channel("online-game-" + id)
+      .channel("online-game-" + id, { config: { presence: { key: thisRoom.userId } } })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "online_games", filter: "id=eq." + id }, (payload) => {
         if (room === thisRoom) {
           applyRow(payload.new);
         }
       })
+      .on("presence", { event: "sync" }, () => evaluatePresence(thisRoom))
       .subscribe((status) => {
-        if (status === "SUBSCRIBED" && room === thisRoom) {
-          refreshRoom();
+        if (room !== thisRoom) {
+          return;
+        }
+        if (status === "SUBSCRIBED") {
+          thisRoom.subscribedOnce = true;
+          channel.track({ online: true }).catch(() => {});
+          checkConnection();
+          // The server can report "subscribed" a moment before it starts
+          // delivering database changes; read once more shortly after, so a
+          // change in that gap (e.g. the guest joining) is never missed.
+          setTimeout(() => {
+            if (room === thisRoom) {
+              refreshRoom();
+            }
+          }, 1500);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          if (thisRoom.subscribedOnce) {
+            setConnection("reconnecting");
+          }
         }
       });
     thisRoom.channel = channel;
+    thisRoom.healthTimer = setInterval(checkConnection, HEALTH_CHECK_MS);
   }
 
   // --- The online board ---------------------------------------------------------
@@ -267,7 +495,7 @@
       return;
     }
     const state = Online.deriveOnlineState(room.row, room.userId);
-    const view = Online.getOnlineBoardView(state, { pending: movePending });
+    const view = Online.getOnlineBoardView(state, boardOptions());
 
     setBoardHeader(view.title, view.badge);
     setStatusLine(view.status, view.resultMark);
@@ -275,7 +503,7 @@
     // server's counts - never counted here.
     setScoreboard("You", "Opponent", view.scores.you, view.scores.opponent, view.scores.draws);
     renderBoard(state ? state.board : TicTacToeGame.createEmptyBoard(), {
-      winningLine: state ? state.winningLine : null,
+      winningLine: state && !room.expired && !room.sessionEnded ? state.winningLine : null,
       locked: !view.interactive,
     });
     setBoardNote(boardNotice || view.note);
@@ -305,8 +533,37 @@
     boardLeave.hidden = false;
     enterOnlineBoard(onSquare);
     renderOnlineBoard();
-    const view = Online.getOnlineBoardView(Online.deriveOnlineState(room.row, room.userId));
+    const view = Online.getOnlineBoardView(Online.deriveOnlineState(room.row, room.userId), boardOptions());
     announce(`Online match. ${view.badge ? view.badge + ". " : ""}${view.status}`);
+  }
+
+  // What to do when a move or rematch request fails. Never retried
+  // automatically: the next re-read of the room shows what really happened.
+  async function handleActionError(thisRoom, error, { isMove }) {
+    if (Online.isSessionFailure(error)) {
+      endSession();
+      return "";
+    }
+    const raw = Online.normalizeBackendError(error);
+    if (raw && raw.code === "ROOM_EXPIRED") {
+      markExpired();
+      return "";
+    }
+    if (Online.friendlyErrorMessage(error).code === "UNAVAILABLE") {
+      // The request may or may not have reached the server; the re-read
+      // after reconnecting will show the truth.
+      setConnection("reconnecting");
+      return Online.MESSAGES.NETWORK_ACTION;
+    }
+    let notice = "";
+    if (isMove && raw && (raw.code === "NOT_YOUR_TURN" || raw.code === "CELL_TAKEN")) {
+      notice = "That move is no longer available.";
+    } else if (!raw || !raw.known) {
+      notice = Online.MESSAGES.GENERIC;
+    }
+    // GAME_OVER / ROOM_CLOSED / NOT_A_PLAYER: the re-read shows why.
+    await refreshRoom();
+    return notice;
   }
 
   // The player picked a square. The server decides; we only draw its answer.
@@ -315,8 +572,8 @@
       return;
     }
     const state = Online.deriveOnlineState(room.row, room.userId);
-    if (!Online.getOnlineBoardView(state).interactive || state.board[index] !== "") {
-      return; // not our turn / square taken: nothing to send
+    if (!Online.getOnlineBoardView(state, boardOptions()).interactive || state.board[index] !== "") {
+      return; // not our turn / square taken / not connected: nothing to send
     }
     const thisRoom = room;
     movePending = true;
@@ -336,17 +593,7 @@
       if (room !== thisRoom) {
         return;
       }
-      const friendly = Online.friendlyErrorMessage(error);
-      const raw = Online.normalizeBackendError(error);
-      if (raw && (raw.code === "NOT_YOUR_TURN" || raw.code === "CELL_TAKEN")) {
-        notice = "That move is no longer available.";
-      } else if (friendly.code === "UNAVAILABLE") {
-        notice = "Your move wasn't sent. Check your connection and try again.";
-      } else if (!raw || !raw.known) {
-        notice = friendly.message;
-      }
-      // GAME_OVER / ROOM_CLOSED / NOT_A_PLAYER: the re-read shows why.
-      await refreshRoom();
+      notice = await handleActionError(thisRoom, error, { isMove: true });
     } finally {
       movePending = false;
     }
@@ -361,7 +608,7 @@
 
   // Rematch / Accept Rematch.
   rematchButton.addEventListener("click", async () => {
-    if (!room || !room.row || movePending) {
+    if (!room || !room.row || movePending || room.connection !== "connected") {
       return;
     }
     const thisRoom = room;
@@ -382,10 +629,7 @@
       if (room !== thisRoom) {
         return;
       }
-      notice = Online.friendlyErrorMessage(error).code === "UNAVAILABLE"
-        ? "Couldn't reach the game. Check your connection and try again."
-        : "";
-      await refreshRoom();
+      notice = await handleActionError(thisRoom, error, { isMove: false });
     } finally {
       movePending = false;
     }
@@ -399,7 +643,7 @@
   });
 
   // Leave Match (asks first: it closes the room for the friend too), or Back
-  // once the room is already closed.
+  // once the room is closed / expired / no longer ours.
   boardLeave.addEventListener("click", () => {
     if (boardLeave.dataset.confirm === "yes") {
       boardLeave.hidden = true;
@@ -424,17 +668,44 @@
   startButton.addEventListener("click", startMatch);
 
   // A phone waking up or a tab coming back may have missed live updates:
-  // read the room again.
+  // check the connection, say we're here again, and read the room again.
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && room && room.row) {
-      refreshRoom();
+    if (document.visibilityState !== "visible" || !room || !room.row) {
+      return;
     }
+    if (room.channel && room.channel.state === "joined") {
+      room.channel.track({ online: true }).catch(() => {});
+    }
+    checkConnection();
+    refreshRoom();
   });
+
+  // The browser's own idea of being online changes the connection display at
+  // once (the periodic check would notice within a couple of seconds anyway).
+  window.addEventListener("offline", () => checkConnection());
+  window.addEventListener("online", () => checkConnection());
 
   // We have a room row from create_game or join_game: show the lobby.
   function enterRoom(connection, row) {
-    room = { client: connection.client, userId: connection.user.id, row: null, channel: null };
+    room = {
+      client: connection.client,
+      userId: connection.user.id,
+      row: null,
+      channel: null,
+      connection: "connecting",
+      subscribedOnce: false,
+      recovering: false,
+      opponent: "unknown",
+      opponentBack: false,
+      graceTimer: null,
+      backTimer: null,
+      healthTimer: null,
+      expired: false,
+      sessionEnded: false,
+      expiryHint: false,
+    };
     joiningCode = null;
+    endedRoomCode = null;
     applyRow(row);
     setAddressRoom(row.room_code);
     if (document.getElementById("lobby-screen").classList.contains("hidden")) {
@@ -444,7 +715,8 @@
   }
 
   // Leave the lobby: stop listening, optionally close the room on the server,
-  // and go back to the Online screen.
+  // and go back to the Online screen. (Never called for a refresh or a closed
+  // tab: then the room stays open and the player can come back.)
   async function exitLobby({ closeRoom }) {
     const leaving = room;
     room = null;
@@ -456,6 +728,11 @@
     clearTimeout(copyTimer);
     copyButton.textContent = COPY_LABEL;
     setAddressRoom(null);
+    if (leaving) {
+      clearTimeout(leaving.graceTimer);
+      clearTimeout(leaving.backTimer);
+      clearInterval(leaving.healthTimer);
+    }
 
     if (leaving && closeRoom && leaving.row) {
       [leaveButton, leaveYes, boardLeave, boardLeaveYes].forEach((b) => (b.disabled = true));
@@ -565,8 +842,13 @@
         codeInput.value = code;
         showScreen("online-screen");
       }
-      setOnlineMessage(friendly.message, { error: true, invalidCode: friendly.code === "INVALID_ROOM_CODE" });
-      announce(friendly.message);
+      // After this browser's online identity ended, a new identity can't take
+      // the old seat; say so plainly instead of a bare "game is full".
+      const message = friendly.code === "ROOM_FULL" && endedRoomCode === code
+        ? Online.MESSAGES.SESSION_SEAT_TAKEN
+        : friendly.message;
+      setOnlineMessage(message, { error: true, invalidCode: friendly.code === "INVALID_ROOM_CODE" });
+      announce(message);
       return;
     }
     enterRoom(connection, row);

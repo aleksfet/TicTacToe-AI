@@ -620,3 +620,97 @@ test("several missed moves at once are summarised; nothing new means nothing to 
   assert.equal(Online.describeOnlineChange(prev, prev), "");
   assert.equal(Online.describeOnlineChange(null, prev), "");
 });
+
+// --- Connection awareness (Phase 3E) -------------------------------------------------
+
+test("presence: a friend who disappears gets a grace period before 'disconnected'", () => {
+  assert.deepEqual(Online.presenceTransition("present", false), { next: "away", startGrace: true, cancelGrace: false, returned: false });
+  assert.deepEqual(Online.presenceTransition("unknown", false), { next: "away", startGrace: true, cancelGrace: false, returned: false });
+  // Still missing: nothing new (the timer that is already running decides).
+  assert.deepEqual(Online.presenceTransition("away", false), { next: "away", startGrace: false, cancelGrace: false, returned: false });
+  assert.deepEqual(Online.presenceTransition("disconnected", false), { next: "disconnected", startGrace: false, cancelGrace: false, returned: false });
+});
+
+test("presence: back within the grace period is silent; back after it is announced", () => {
+  assert.deepEqual(Online.presenceTransition("away", true), { next: "present", startGrace: false, cancelGrace: true, returned: false });
+  assert.deepEqual(Online.presenceTransition("disconnected", true), { next: "present", startGrace: false, cancelGrace: true, returned: true });
+  assert.deepEqual(Online.presenceTransition("unknown", true), { next: "present", startGrace: false, cancelGrace: false, returned: false });
+  assert.deepEqual(Online.presenceTransition("present", true), { next: "present", startGrace: false, cancelGrace: false, returned: false });
+});
+
+test("own connection down: board locked, 'Reconnecting…' instead of a misleading turn", () => {
+  const view = boardView({}, HOST, { connection: "reconnecting" });
+  assert.equal(view.status, "Reconnecting…");
+  assert.equal(view.interactive, false, "never a playable board while disconnected");
+  assert.equal(boardView({}, HOST, { connection: "connecting" }).status, "Connecting…");
+  assert.equal(boardView({}, HOST, { connection: "connecting" }).interactive, false);
+  assert.equal(boardView({}, HOST, { connection: "connected" }).interactive, true);
+});
+
+test("own connection down after a result: the result stays, rematch waits", () => {
+  const view = boardView({ board: "XXXOO....", host_wins: 1 }, HOST, { connection: "reconnecting" });
+  assert.equal(view.status, "You win!", "the result is not replaced");
+  assert.equal(view.note, "Reconnecting…");
+  assert.equal(view.primary.disabled, true, "no rematch request while disconnected");
+});
+
+test("friend disconnected / back only changes the note; turn and result stay", () => {
+  const playing = boardView({}, HOST, { opponent: "disconnected" });
+  assert.equal(playing.status, "Your turn");
+  assert.equal(playing.interactive, true, "the room is still open; the server decides");
+  assert.equal(playing.note, "Opponent disconnected. Waiting for them to return…");
+  assert.equal(boardView({}, HOST, { opponent: "back" }).note, "Opponent is back.");
+  const finished = boardView({ board: "XXXOO....", host_wins: 1 }, GUEST, { opponent: "disconnected" });
+  assert.equal(finished.status, "Opponent wins.");
+  assert.equal(finished.note, "Opponent disconnected. Waiting for them to return…");
+  // "away" (inside the grace period) shows nothing.
+  assert.equal(boardView({}, HOST, { opponent: "away" }).note, "");
+});
+
+test("closed rooms ignore presence and connection messages", () => {
+  const view = boardView({ left_by: GUEST }, HOST, { opponent: "disconnected", connection: "reconnecting" });
+  assert.equal(view.status, "Match closed.");
+  assert.equal(view.note, "Your friend left the game.");
+});
+
+test("expired room: clear message and only Back", () => {
+  const view = boardView({ board: "X........" }, HOST, { expired: true });
+  assert.equal(view.status, "This game has expired.");
+  assert.equal(view.note, "Start a new game.");
+  assert.equal(view.interactive, false);
+  assert.equal(view.primary, null);
+  assert.deepEqual(view.leave, { label: "Back", confirm: false });
+});
+
+test("session ended: clear message without technical words, and only Back", () => {
+  const view = boardView({ board: "X........" }, HOST, { sessionEnded: true });
+  assert.equal(view.status, "Your online session ended.");
+  assert.equal(view.note, "Return to Online and rejoin the game.");
+  assert.equal(view.interactive, false);
+  assert.deepEqual(view.leave, { label: "Back", confirm: false });
+  assert.doesNotMatch(view.status + view.note, /auth|token|jwt|account|login|supabase/i);
+});
+
+test("isSessionFailure recognises a lost identity, not ordinary errors", () => {
+  assert.equal(Online.isSessionFailure({ code: "42501", message: "permission denied for function make_move" }), true);
+  assert.equal(Online.isSessionFailure({ code: "42501", message: "permission denied for table online_games" }), true);
+  assert.equal(Online.isSessionFailure({ code: "PGRST301", message: "JWT expired" }), true);
+  assert.equal(Online.isSessionFailure(Object.assign(new Error("Unauthorized"), { status: 401 })), true);
+  assert.equal(Online.isSessionFailure({ code: "P0001", message: "NOT_AUTHENTICATED" }), true);
+  for (const other of [{ code: "P0001", message: "NOT_YOUR_TURN" }, new TypeError("Failed to fetch"), null, undefined, "x"]) {
+    assert.equal(Online.isSessionFailure(other), false);
+  }
+});
+
+test("lobby connection note", () => {
+  const note = (o) => Online.lobbyConnectionNote(o);
+  assert.equal(note({ phase: "ready", connection: "reconnecting" }), "Reconnecting…");
+  assert.equal(note({ phase: "waiting", connection: "reconnecting" }), "Reconnecting…");
+  assert.equal(note({ phase: "waiting", likelyExpired: true }), "This invite has probably expired. Start a new game.");
+  assert.equal(note({ phase: "ready", opponent: "disconnected" }), "Opponent disconnected. Waiting for them to return…");
+  assert.equal(note({ phase: "ready", opponent: "back" }), "Opponent is back.");
+  assert.equal(note({ phase: "ready", opponent: "away" }), null);
+  assert.equal(note({ phase: "waiting", opponent: "disconnected" }), null, "no friend yet to be disconnected");
+  assert.equal(note({ phase: "closed", connection: "reconnecting" }), null);
+  assert.equal(note({ phase: "joining", connection: "reconnecting" }), null);
+});

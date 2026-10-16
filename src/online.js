@@ -313,6 +313,19 @@ const TicTacToeOnline = ((Game) => {
     UNAVAILABLE: "Online play is unavailable right now. Try again.",
     TOO_MANY_ATTEMPTS: "Too many attempts right now. Wait a minute and try again.",
     GENERIC: "Something went wrong. Please try again.",
+    // Connection and match-health messages (Phase 3E).
+    RECONNECTING: "Reconnecting…",
+    CONNECTING: "Connecting…",
+    CONNECTION_RESTORED: "Connection restored.",
+    NETWORK_ACTION: "Couldn't reach the game. Reconnecting…",
+    OPPONENT_DISCONNECTED: "Opponent disconnected. Waiting for them to return…",
+    OPPONENT_BACK: "Opponent is back.",
+    SESSION_ENDED: "Your online session ended.",
+    SESSION_ENDED_HINT: "Return to Online and rejoin the game.",
+    SESSION_SEAT_TAKEN: "Your online session ended, so this browser can't take its old seat back. Ask your friend to create a new game.",
+    GAME_EXPIRED: "This game has expired.",
+    GAME_EXPIRED_HINT: "Start a new game.",
+    INVITE_PROBABLY_EXPIRED: "This invite has probably expired. Start a new game.",
   });
 
   // Signs that the problem is the connection rather than the game: the online
@@ -429,15 +442,142 @@ const TicTacToeOnline = ((Game) => {
     return state.isMyTurn ? "Your turn" : "Opponent's turn";
   }
 
+  // --- Connection awareness (Phase 3E) ---------------------------------------------
+  //
+  // None of this decides anything about the game: who the players are, whose
+  // turn it is and whether the room is open all come from the server's row.
+  // It only changes what the screen says and whether it accepts clicks.
+
+  // The opponent's presence, as seen through the live connection:
+  //   "unknown"       not heard yet
+  //   "present"       connected
+  //   "away"          just disappeared; in the grace period (maybe a refresh)
+  //   "disconnected"  gone for longer than the grace period
+  // presenceTransition(current, isPresent) says what changes when presence
+  // is (re)reported, so the screen only reacts to real changes.
+  //   startGrace  start the grace timer (the opponent just disappeared)
+  //   cancelGrace stop it (they came back in time)
+  //   returned    they came back after being shown as disconnected
+  function presenceTransition(current, isPresent) {
+    if (isPresent) {
+      return {
+        next: "present",
+        startGrace: false,
+        cancelGrace: current === "away" || current === "disconnected",
+        returned: current === "disconnected",
+      };
+    }
+    if (current === "present" || current === "unknown") {
+      return { next: "away", startGrace: true, cancelGrace: false, returned: false };
+    }
+    return { next: current, startGrace: false, cancelGrace: false, returned: false };
+  }
+
+  // Is this error the browser's online identity no longer being accepted
+  // (e.g. it was signed out or expired)? Then the player has to rejoin.
+  function isSessionFailure(error) {
+    if (!error || typeof error !== "object") {
+      return false;
+    }
+    const message = typeof error.message === "string" ? error.message : "";
+    const code = typeof error.code === "string" ? error.code : "";
+    return (
+      error.status === 401 ||
+      /^PGRST30\d$/.test(code) ||
+      (code === "P0001" && message === "NOT_AUTHENTICATED") ||
+      // Without a valid identity the request runs with browser-only rights,
+      // which may not call the game functions or read rooms at all.
+      (code === "42501" && /permission denied for (function|table)/i.test(message))
+    );
+  }
+
   // Everything the game screen shows during an online match, from one
-  // player's side. options.pending = our own move is on its way to the server
-  // (the board stays locked until the server answers).
+  // player's side.
+  //   options.pending       our own move is on its way to the server (the
+  //                         board stays locked until the server answers)
+  //   options.connection    "connected" | "connecting" | "reconnecting"
+  //   options.opponent      "unknown" | "present" | "away" | "disconnected"
+  //                         | "back" (just returned; shown briefly)
+  //   options.expired       the server said the room expired
+  //   options.sessionEnded  this browser's online identity stopped working
+  // Returns:
   //   interactive  may this player pick a square right now?
   //   resultMark   "x" / "o" / "draw" to colour the result line, or null
   //   primary      the main button: { label, disabled } or null
   //   leave        { label, confirm }: confirm = ask first (closes the room)
   // Scores are per person (You / Opponent), never per mark: marks swap.
-  function getOnlineBoardView(state, { pending = false } = {}) {
+  function getOnlineBoardView(state, options = {}) {
+    const view = baseOnlineBoardView(state, options);
+    const { connection = "connected", opponent = "present", expired = false, sessionEnded = false } = options;
+
+    // The room can no longer be played from this browser: only Back.
+    if (sessionEnded || expired) {
+      return {
+        ...view,
+        badge: null,
+        status: sessionEnded ? MESSAGES.SESSION_ENDED : MESSAGES.GAME_EXPIRED,
+        resultMark: null,
+        note: sessionEnded ? MESSAGES.SESSION_ENDED_HINT : MESSAGES.GAME_EXPIRED_HINT,
+        interactive: false,
+        primary: null,
+        leave: { label: "Back", confirm: false },
+      };
+    }
+    const closed = !state || state.status === "closed" || !state.amPlayer;
+    if (closed) {
+      return view;
+    }
+
+    // Our own connection is down: never offer a playable board.
+    if (connection !== "connected") {
+      const text = connection === "connecting" ? MESSAGES.CONNECTING : MESSAGES.RECONNECTING;
+      const finished = state.status === "finished";
+      return {
+        ...view,
+        // A finished game keeps its result on screen; otherwise the turn
+        // line would be misleading while the board is locked.
+        status: finished ? view.status : text,
+        note: finished ? text : "",
+        interactive: false,
+        primary: view.primary ? { ...view.primary, disabled: true } : null,
+      };
+    }
+
+    // The opponent's connection only changes the message, not the game.
+    if (state.status === "playing" || state.status === "finished") {
+      if (opponent === "disconnected") {
+        return { ...view, note: MESSAGES.OPPONENT_DISCONNECTED };
+      }
+      if (opponent === "back") {
+        return { ...view, note: MESSAGES.OPPONENT_BACK };
+      }
+    }
+    return view;
+  }
+
+  // The lobby's extra line about the connection, or null to keep its normal
+  // note. likelyExpired is the display-only hint for a host who has waited a
+  // long time (the server still decides; see isLikelyExpired).
+  function lobbyConnectionNote({ phase, connection = "connected", opponent = "present", likelyExpired = false }) {
+    if (phase === "closed" || phase === "joining") {
+      return null;
+    }
+    if (connection === "reconnecting") {
+      return MESSAGES.RECONNECTING;
+    }
+    if (phase === "waiting" && likelyExpired) {
+      return MESSAGES.INVITE_PROBABLY_EXPIRED;
+    }
+    if (phase === "ready" && opponent === "disconnected") {
+      return MESSAGES.OPPONENT_DISCONNECTED;
+    }
+    if (phase === "ready" && opponent === "back") {
+      return MESSAGES.OPPONENT_BACK;
+    }
+    return null;
+  }
+
+  function baseOnlineBoardView(state, { pending = false } = {}) {
     const closed = !state || state.status === "closed" || !state.amPlayer;
     const view = {
       title: "Online Match",
@@ -543,6 +683,9 @@ const TicTacToeOnline = ((Game) => {
     onlineStatusText,
     getOnlineBoardView,
     describeOnlineChange,
+    presenceTransition,
+    isSessionFailure,
+    lobbyConnectionNote,
   };
 })(typeof module !== "undefined" && module.exports ? require("./game.js") : TicTacToeGame);
 
