@@ -2,8 +2,9 @@
 //
 // The screens that start an online game:
 //   Online screen  -> Create Game, or type a room code and Join Game
-//   Lobby screen   -> room code + invite link, "Waiting for opponent…",
-//                     then "Match ready" once both players are in
+//   Lobby screen   -> room code + invite link, "Waiting for opponent…"
+//   Game screen    -> opens by itself on both devices as soon as the server's
+//                     room has both players (no Start button)
 //
 // It uses showScreen() and announce() from script.js (loaded just before this
 // file), the pure helpers in src/online.js, and the connection in
@@ -16,8 +17,8 @@
 //     ignores updates older than the one already shown (row versions).
 //   - There are no accounts: the player's identity is created silently.
 //
-// Once both players are in, "Start Match" opens the normal game screen in
-// online mode (script.js draws it). Every change to the room - our own move
+// Once both players are in, the normal game screen opens in online mode
+// (script.js draws it). Every change to the room - our own move
 // (the server's reply), the opponent's move (a live update), or a re-read -
 // goes through applyRow(), which ignores anything not newer than what is
 // already shown. So a move is drawn and announced exactly once, and only
@@ -50,7 +51,6 @@
   const leaveConfirm = document.getElementById("leave-confirm");
   const leaveYes = document.getElementById("leave-yes");
   const leaveNo = document.getElementById("leave-no");
-  const startButton = document.getElementById("lobby-start");
 
   // The online parts of the game screen.
   const playerScreen = document.getElementById("player-screen");
@@ -190,17 +190,14 @@
       leaveButton.hidden = false;
     }
 
-    startButton.hidden = !view.startLabel || !leaveConfirm.hidden;
-    startButton.textContent = view.startLabel || "Start Match";
-
-    // Tell screen readers when the situation changes (once per change).
+    // Tell screen readers when the situation changes (once per change). A
+    // "ready" lobby is never announced: the board opens at once and says
+    // who joined itself.
     if (view.phase !== lastPhase) {
       if (quiet) {
         // nothing: the board announces its own changes
       } else if (view.phase === "waiting") {
         announce(`Game created. ${lobbyCodeSpoken.textContent}. Waiting for opponent.`);
-      } else if (view.phase === "ready") {
-        announce(`Match ready. ${view.note}`);
       } else if (view.phase === "closed") {
         announce(view.status);
       } else if (view.phase === "joining") {
@@ -268,11 +265,19 @@
     const before = room.row ? Online.deriveOnlineState(room.row, room.userId) : null;
     room.row = row;
     boardNotice = "";
+    const state = Online.deriveOnlineState(row, room.userId);
     const onBoard = onlineBoardVisible();
-    renderLobby({ quiet: onBoard });
-    if (onBoard) {
+    // Both players are in the room (by the server's row, never by Presence):
+    // open the board on this device. Happens once - after that onBoard is
+    // true - whether the row came from our own join, a live update (the
+    // host seeing the guest arrive) or a re-read.
+    const openBoard = !onBoard && !room.expired && !room.sessionEnded && Online.shouldShowOnlineBoard(state);
+    renderLobby({ quiet: onBoard || openBoard });
+    if (openBoard) {
+      enterBoard(state);
+    } else if (onBoard) {
       renderOnlineBoard();
-      const message = Online.describeOnlineChange(before, Online.deriveOnlineState(row, room.userId));
+      const message = Online.describeOnlineChange(before, state);
       if (message) {
         announce(message);
       }
@@ -523,18 +528,15 @@
     }
   }
 
-  // "Start Match" / "Resume Match": open the board for this room.
-  function startMatch() {
-    if (!room || !room.row) {
-      return;
-    }
+  // Open the board for this room (called by applyRow once both players are
+  // in). X simply has "Your turn"; there is no countdown.
+  function enterBoard(state) {
     boardNotice = "";
     boardLeaveConfirm.hidden = true;
     boardLeave.hidden = false;
     enterOnlineBoard(onSquare);
     renderOnlineBoard();
-    const view = Online.getOnlineBoardView(Online.deriveOnlineState(room.row, room.userId), boardOptions());
-    announce(`Online match. ${view.badge ? view.badge + ". " : ""}${view.status}`);
+    announce(`Online match. ${Online.matchEntryMessage(state)}`);
   }
 
   // What to do when a move or rematch request fails. Never retried
@@ -665,8 +667,6 @@
     boardLeave.focus();
   });
 
-  startButton.addEventListener("click", startMatch);
-
   // A phone waking up or a tab coming back may have missed live updates:
   // check the connection, say we're here again, and read the room again.
   document.addEventListener("visibilitychange", () => {
@@ -685,7 +685,9 @@
   window.addEventListener("offline", () => checkConnection());
   window.addEventListener("online", () => checkConnection());
 
-  // We have a room row from create_game or join_game: show the lobby.
+  // We have a room row from create_game or join_game: show the lobby, or
+  // the board straight away if both players are already in (a guest who
+  // just joined, or anyone coming back to a match after a refresh).
   function enterRoom(connection, row) {
     room = {
       client: connection.client,
@@ -708,7 +710,7 @@
     endedRoomCode = null;
     applyRow(row);
     setAddressRoom(row.room_code);
-    if (document.getElementById("lobby-screen").classList.contains("hidden")) {
+    if (!onlineBoardVisible() && document.getElementById("lobby-screen").classList.contains("hidden")) {
       showScreen("lobby-screen");
     }
     subscribe(connection.session);
@@ -922,7 +924,7 @@
     const code = room && room.row ? room.row.room_code : "";
     try {
       await navigator.share({
-        title: "Tic Tac Toe AI Arena",
+        title: "Tic Tac Toe Arena",
         text: `Play Tic Tac Toe with me! Room code: ${code}`,
         url: inviteLink.value,
       });
@@ -941,7 +943,6 @@
     if (leaveButton.dataset.confirm === "yes") {
       // Two players are in the room: leaving closes it for the friend too.
       leaveButton.hidden = true;
-      startButton.hidden = true;
       leaveConfirm.hidden = false;
       leaveNo.focus();
       announce(document.getElementById("leave-confirm-text").textContent);
@@ -957,7 +958,7 @@
   leaveNo.addEventListener("click", () => {
     leaveConfirm.hidden = true;
     leaveButton.hidden = false;
-    renderLobby({ quiet: true }); // brings Start Match back
+    renderLobby({ quiet: true });
     leaveButton.focus();
   });
 

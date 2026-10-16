@@ -564,12 +564,49 @@ test("a stranger never gets an interactive online board", () => {
   assert.equal(view.status, "Match closed.");
 });
 
-test("lobby offers Start Match for a fresh game and Resume Match for one under way", () => {
+// --- Automatic entry to the board ---------------------------------------------------------
+
+const showsBoard = (overrides, who) => Online.shouldShowOnlineBoard(Online.deriveOnlineState(row(overrides), who));
+
+test("a host waiting alone stays in the lobby", () => {
+  assert.equal(showsBoard({ guest_id: null, version: 1 }, HOST), false);
+});
+
+test("both players enter the board as soon as the row has both of them", () => {
+  assert.equal(showsBoard({}, HOST), true);
+  assert.equal(showsBoard({}, GUEST), true);
+  // A game under way, a finished round and a pending rematch (e.g. a refresh).
+  assert.equal(showsBoard({ board: "X...O....", version: 4 }, GUEST), true);
+  assert.equal(showsBoard({ board: "XXXOO....", host_wins: 1 }, HOST), true);
+  assert.equal(showsBoard({ board: "XXXOO....", host_wins: 1, rematch_requested_by: GUEST }, HOST), true);
+  assert.equal(showsBoard({ host_mark: "O", board: "X........" }, HOST), true, "after a mark swap");
+});
+
+test("closed rooms, strangers and broken rows never open the board", () => {
+  assert.equal(showsBoard({ left_by: GUEST }, HOST), false);
+  assert.equal(showsBoard({ guest_id: null, left_by: HOST }, HOST), false);
+  assert.equal(showsBoard({}, STRANGER), false);
+  assert.equal(showsBoard({}, null), false);
+  assert.equal(Online.shouldShowOnlineBoard(null), false);
+  assert.equal(Online.shouldShowOnlineBoard(Online.deriveOnlineState(row({ board: "bad" }), HOST)), false);
+});
+
+test("the lobby no longer offers a Start Match button", () => {
   const lobby = (overrides, who = HOST) => Online.getLobbyView(Online.deriveOnlineState(row(overrides), who));
-  assert.equal(lobby({}).startLabel, "Start Match");
-  assert.equal(lobby({ board: "X........", version: 3 }).startLabel, "Resume Match");
-  assert.equal(lobby({ board: "XXXOO....", host_wins: 1 }).startLabel, "Resume Match");
-  assert.equal(lobby({ guest_id: null }).startLabel, undefined, "no Start while waiting");
+  assert.equal(lobby({}).startLabel, undefined);
+  assert.equal(lobby({ board: "X........", version: 3 }).startLabel, undefined);
+  assert.equal(lobby({ guest_id: null }).startLabel, undefined);
+});
+
+test("entering the board says who joined and who goes first, or where a game stands", () => {
+  const message = (overrides, who) => Online.matchEntryMessage(Online.deriveOnlineState(row(overrides), who));
+  assert.equal(message({}, HOST), "Your friend joined. You are X and go first.");
+  assert.equal(message({}, GUEST), "You joined your friend's game. You are O. Your friend goes first.");
+  assert.equal(message({ host_mark: "O" }, GUEST), "You joined your friend's game. You are X and go first.");
+  assert.equal(message({ board: "X........", version: 3 }, GUEST), "Match resumed. You are O. Your turn.");
+  assert.equal(message({ board: "X........", version: 3 }, HOST), "Match resumed. You are X. Opponent's turn.");
+  assert.equal(message({ board: "XXXOO....", host_wins: 1 }, GUEST), "Match resumed. You are O. Opponent wins.");
+  assert.equal(message({ board: "XOXXOOOXX", draws: 1 }, HOST), "Match resumed. You are X. It's a draw!");
 });
 
 // --- Announcements --------------------------------------------------------------------

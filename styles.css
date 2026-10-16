@@ -121,6 +121,7 @@ body {
 
 /* The centered white card that holds the screens. */
 .card {
+  position: relative; /* the game screen's theme menu sits in its corner */
   width: 100%;
   max-width: 440px; /* never gets too wide on big screens */
   background: var(--card-bg);
@@ -343,6 +344,83 @@ button:focus-visible {
 .arena-btn.active {
   border-color: var(--btn);
   color: var(--accent-text);
+}
+
+/* --- Theme menu on the game screen (top-right of the card) ---
+   The palette button sits in the card's corner, clear of the centred
+   title, and adds no height. The icon is small; the tap area is 44px. */
+.theme-menu {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  z-index: 2;
+}
+
+.theme-toggle {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.theme-toggle[aria-expanded="true"] {
+  background: var(--cell-bg);
+  color: var(--accent-text);
+}
+
+/* The small list of arenas, under the palette button. */
+.theme-popover {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 8.5rem;
+  padding: 0.45rem;
+  border: 1px solid var(--cell-border);
+  border-radius: 14px;
+  background: var(--card-bg);
+  box-shadow: 0 10px 24px var(--card-shadow);
+}
+
+/* Same look as the start screen's arena buttons, stacked, each with a dot
+   in that arena's main colour. */
+.theme-option {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+}
+
+.theme-option::before {
+  content: "";
+  flex: none;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.theme-option[data-theme="classic"]::before {
+  background: #4664ee;
+}
+.theme-option[data-theme="ocean"]::before {
+  background: #0277bd;
+}
+.theme-option[data-theme="neon"]::before {
+  background: #7c4dff;
 }
 
 /* --- Start screen polish --- */
@@ -815,6 +893,11 @@ button:focus-visible {
 
   .arena-btn:hover {
     background: var(--cell-hover);
+  }
+
+  .theme-toggle:hover {
+    background: var(--cell-hover);
+    color: var(--text);
   }
 
   #start-screen .button-group .btn:hover {

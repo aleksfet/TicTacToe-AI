@@ -37,6 +37,8 @@ const navButtons = document.querySelectorAll("[data-target]");
 function showScreen(screenId) {
   // Cancel any pending computer move so it can't fire on another screen.
   clearTimeout(computerTimer);
+  // Never leave the game screen's theme menu open behind another screen.
+  closeThemeMenu();
 
   // Remember which screen we are leaving (used to choose where focus goes).
   const fromScreen = document.querySelector(".screen:not(.hidden)");
@@ -151,6 +153,73 @@ themeButtons.forEach((button) => {
 
 // Start on the Classic arena.
 setTheme("classic");
+
+// --- The small theme menu on the game screen ---
+//
+// The palette button (top-right of the game card) opens a little list of the
+// same three arenas. Its buttons carry data-theme too, so the code above
+// already switches the theme and keeps both pickers in step. Changing the
+// theme only swaps the body class: the board, scores, turn, the computer and
+// an online match are never touched.
+
+const themeMenu = document.getElementById("theme-menu");
+const themeToggle = document.getElementById("theme-toggle");
+const themePopover = document.getElementById("theme-popover");
+
+function openThemeMenu() {
+  themePopover.hidden = false;
+  themeToggle.setAttribute("aria-expanded", "true");
+  // Start on the arena in use, so keyboard users see where they are.
+  const current = themePopover.querySelector('[aria-pressed="true"]') || themePopover.querySelector("button");
+  current.focus();
+}
+
+// returnFocus: put focus back on the palette button (after choosing, or
+// Escape). Not when the player clicked somewhere else on the page.
+function closeThemeMenu({ returnFocus = false } = {}) {
+  if (themePopover.hidden) {
+    return;
+  }
+  themePopover.hidden = true;
+  themeToggle.setAttribute("aria-expanded", "false");
+  if (returnFocus) {
+    themeToggle.focus();
+  }
+}
+
+themeToggle.addEventListener("click", () => {
+  if (themePopover.hidden) {
+    openThemeMenu();
+  } else {
+    closeThemeMenu();
+  }
+});
+
+// Choosing an arena closes the menu (the theme itself is set above).
+themePopover.querySelectorAll("[data-theme]").forEach((button) => {
+  button.addEventListener("click", () => closeThemeMenu({ returnFocus: true }));
+});
+
+themeMenu.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !themePopover.hidden) {
+    event.preventDefault();
+    closeThemeMenu({ returnFocus: true });
+  }
+});
+
+// A click or tap anywhere else closes it...
+document.addEventListener("pointerdown", (event) => {
+  if (!themeMenu.contains(event.target)) {
+    closeThemeMenu();
+  }
+});
+
+// ...and so does tabbing away from it.
+themeMenu.addEventListener("focusout", (event) => {
+  if (event.relatedTarget && !themeMenu.contains(event.relatedTarget)) {
+    closeThemeMenu();
+  }
+});
 
 // ---------------------------------------------------------------------------
 // The game

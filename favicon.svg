@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Tic Tac Toe AI Arena icon: a small board with an X and an O,
+  <!-- Tic Tac Toe Arena icon: a small board with an X and an O,
        in the Classic theme's X and O colours (see styles.css). -->
   <rect width="64" height="64" rx="14" fill="#ffffff"/>
   <g stroke="#c5cde0" stroke-width="3" stroke-linecap="round">

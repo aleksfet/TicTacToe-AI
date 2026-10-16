@@ -406,16 +406,38 @@ const TicTacToeOnline = ((Game) => {
         showCode: true, showInvite: true, leaveLabel: "Cancel", confirmLeave: false,
       };
     }
-    // Both players are in the room ("playing" or "finished").
-    const who = state.amHost ? "Your friend joined." : "You joined your friend's game.";
-    const first = state.myMark === "X" ? `You are X and go first.` : `You are O. Your friend goes first.`;
-    // A game already under way (e.g. after a refresh) is resumed, not started.
-    const underway = state.board.some((v) => v !== "") || state.status === "finished" || state.rematch !== null;
+    // Both players are in the room ("playing" or "finished"). The screen
+    // moves on to the board straight away (see shouldShowOnlineBoard), so
+    // this is only ever on screen for a moment.
     return {
-      phase: "ready", status: "Match ready", note: `${who} ${first}`, badge,
+      phase: "ready", status: "Match ready", note: matchEntryMessage(state), badge,
       showCode: true, showInvite: false, leaveLabel: "Leave Match", confirmLeave: true,
-      startLabel: underway ? "Resume Match" : "Start Match",
     };
+  }
+
+  // Should this player be on the online board? Yes as soon as the server's
+  // row has both players in an open room that this player belongs to - no
+  // Start button, no countdown. A host waiting alone stays in the lobby.
+  // (Presence plays no part: only the row decides.)
+  function shouldShowOnlineBoard(state) {
+    return Boolean(
+      state && state.amPlayer && !state.closed && !state.waitingForOpponent &&
+        (state.status === "playing" || state.status === "finished"),
+    );
+  }
+
+  // What to tell the player when the board opens on its own: who joined and
+  // who goes first for a fresh game, or where things stand for a game that
+  // is already under way (e.g. after a refresh).
+  function matchEntryMessage(state) {
+    const underway = state.board.some((v) => v !== "") || state.status === "finished" || state.rematch !== null;
+    if (underway) {
+      const text = onlineStatusText(state);
+      return `Match resumed. You are ${state.myMark}. ${state.status === "finished" ? text : text + "."}`;
+    }
+    const who = state.amHost ? "Your friend joined." : "You joined your friend's game.";
+    const first = state.myMark === "X" ? "You are X and go first." : "You are O. Your friend goes first.";
+    return `${who} ${first}`;
   }
 
   // --- The online board -----------------------------------------------------------
@@ -678,6 +700,8 @@ const TicTacToeOnline = ((Game) => {
     MESSAGES,
     friendlyErrorMessage,
     getLobbyView,
+    shouldShowOnlineBoard,
+    matchEntryMessage,
     spellRoomCode,
     squareName,
     onlineStatusText,

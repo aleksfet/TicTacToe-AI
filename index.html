@@ -19,7 +19,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tic Tac Toe AI Arena</title>
+    <title>Tic Tac Toe Arena</title>
     <meta
       name="description"
       content="Play Tic Tac Toe against three AI levels, up to an unbeatable Minimax AI, or with a friend on the same device or online through an invite link."
@@ -27,14 +27,14 @@
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <!-- The "?v=" forces the browser to reload the latest CSS instead of
          showing an old cached copy. Bump the number after future edits. -->
-    <link rel="stylesheet" href="styles.css?v=16" />
+    <link rel="stylesheet" href="styles.css?v=17" />
   </head>
   <body>
     <!-- The card sits in the middle of the page and holds every screen. -->
     <main class="card">
       <!-- ===== Start screen (visible first) ===== -->
       <section id="start-screen" class="screen">
-        <h1 class="title" tabindex="-1">Tic Tac Toe AI Arena</h1>
+        <h1 class="title" tabindex="-1">Tic Tac Toe Arena</h1>
         <p class="subtitle">Choose a mode: play with someone or challenge the computer.</p>
 
         <!-- Decorative mini board (not clickable). It uses mini-* classes on
@@ -79,6 +79,39 @@
              The badge below it only appears in computer modes. -->
         <h2 id="board-title" class="title" tabindex="-1">Player vs Player</h2>
         <span id="difficulty-badge" class="badge hidden"></span>
+
+        <!-- Change the arena (theme) during a game, top-right of the card.
+             It uses the same themes as the start screen's picker (the
+             data-theme buttons, see script.js) and never touches the game. -->
+        <div id="theme-menu" class="theme-menu">
+          <button
+            id="theme-toggle"
+            class="theme-toggle"
+            type="button"
+            aria-label="Change arena theme"
+            aria-expanded="false"
+            aria-controls="theme-popover"
+          >
+            <!-- A small palette icon (decorative). -->
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+              <path
+                d="M12 3a9 9 0 0 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5c0-4-4-7.2-9-7.2Z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linejoin="round"
+              />
+              <circle cx="7.5" cy="11.5" r="1.4" fill="currentColor" />
+              <circle cx="10.5" cy="7.5" r="1.4" fill="currentColor" />
+              <circle cx="15" cy="7.8" r="1.4" fill="currentColor" />
+            </svg>
+          </button>
+          <div id="theme-popover" class="theme-popover" role="group" aria-label="Arena theme" hidden>
+            <button class="arena-btn theme-option" type="button" data-theme="classic" aria-pressed="false">Classic</button>
+            <button class="arena-btn theme-option" type="button" data-theme="ocean" aria-pressed="false">Ocean</button>
+            <button class="arena-btn theme-option" type="button" data-theme="neon" aria-pressed="false">Neon</button>
+          </div>
+        </div>
 
         <!-- Status line: whose turn it is, or the result. (Screen readers hear
              these changes through the #announcer region below instead.) -->
@@ -231,7 +264,8 @@
         </div>
       </section>
 
-      <!-- ===== Online lobby: room code, invite, waiting, match ready ===== -->
+      <!-- ===== Online lobby: room code, invite, waiting =====
+           Once both players are in, the board opens by itself. -->
       <section id="lobby-screen" class="screen hidden">
         <h2 class="title" tabindex="-1">Online Match</h2>
         <span id="lobby-badge" class="badge" hidden></span>
@@ -259,8 +293,6 @@
         <p id="lobby-note" class="lobby-note"></p>
 
         <div class="lobby-controls">
-          <!-- Shown once both players are in: opens the online board. -->
-          <button id="lobby-start" class="btn" hidden>Start Match</button>
           <button id="lobby-leave" class="btn btn-secondary">Cancel</button>
           <!-- Leaving a match with two players closes it for both, so ask first. -->
           <div id="leave-confirm" class="leave-confirm" hidden>
@@ -319,9 +351,9 @@
     <script src="src/game.js?v=1" defer></script>
     <script src="src/ai.js?v=1" defer></script>
     <script src="src/online-config.js?v=1" defer></script>
-    <script src="src/online.js?v=4" defer></script>
+    <script src="src/online.js?v=5" defer></script>
     <script src="src/online-client.js?v=1" defer></script>
-    <script src="script.js?v=17" defer></script>
-    <script src="src/online-ui.js?v=4" defer></script>
+    <script src="script.js?v=18" defer></script>
+    <script src="src/online-ui.js?v=5" defer></script>
   </body>
 </html>
