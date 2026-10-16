@@ -9,6 +9,9 @@
   - styles.css   controls how the page looks
   - src/game.js  the game rules (wins, draws, legal moves)
   - src/ai.js    the computer players (Easy, Medium, Impossible/Minimax)
+  - src/online-config.js, src/online.js, src/online-client.js
+                 online play: public Supabase settings, pure helpers, and
+                 the (lazy) connection
   - script.js    the page: screens, themes, clicks, scoreboard
 -->
 <html lang="en">
@@ -181,11 +184,16 @@
     </main>
 
     <!-- "defer" makes the scripts run after the page has loaded, in this
-         order: the game rules, then the AI (which uses them), then the page
-         script (which uses both).
+         order: the game rules, then the AI (which uses them), then the
+         online-play helpers, then the page script (which uses them).
+         The online files only define helpers: nothing connects to the
+         online service until online play is started.
          The "?v=" works like the CSS one: it forces a fresh copy. -->
     <script src="src/game.js?v=1" defer></script>
     <script src="src/ai.js?v=1" defer></script>
+    <script src="src/online-config.js?v=1" defer></script>
+    <script src="src/online.js?v=1" defer></script>
+    <script src="src/online-client.js?v=1" defer></script>
     <script src="script.js?v=14" defer></script>
   </body>
 </html>
